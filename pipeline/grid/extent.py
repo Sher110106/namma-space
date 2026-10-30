@@ -90,6 +90,7 @@ def room_extent(obst_cell_xz: np.ndarray, obst_splat_xz: np.ndarray, cam_xz: np.
     su, sv = proj(obst_splat_xz)
     pu, pv = proj(cam_xz)
     ext = []
+    walls = []
     for cell_a, cell_b, splat_a, pa, perp in ((cu, cv, su, pu, pv), (cv, cu, sv, pv, pu)):
         rng = float(perp.max() - perp.min())
         lo = _outer_wall(cell_a, cell_b, splat_a, float(pa.min()), float(pa.max()), rng, cell, zone_m, "lo")
@@ -97,5 +98,16 @@ def room_extent(obst_cell_xz: np.ndarray, obst_splat_xz: np.ndarray, cam_xz: np.
         if lo is None or hi is None or hi <= lo:
             return None
         ext.append(hi - lo)
+        walls.append([round(lo, 4), round(hi, 4)])
     return {"axes_yaw_deg": round(float(a), 2), "extent_axes_m": [round(ext[0], 3), round(ext[1], 3)],
-            "room_extent_m": [round(max(ext), 3), round(min(ext), 3)]}
+            "room_extent_m": [round(max(ext), 3), round(min(ext), 3)],
+            "walls_uv": walls}   # outer wall positions along the two axes (u = x c + z s, v = -x s + z c)
+
+
+def outside_walls(x: np.ndarray, z: np.ndarray, ext: dict, margin: float) -> np.ndarray:
+    """True where (x, z) lies more than ``margin`` beyond the outer walls that room_extent found."""
+    th = np.radians(ext["axes_yaw_deg"])
+    c, s = np.cos(th), np.sin(th)
+    u, v = x * c + z * s, -x * s + z * c
+    (ulo, uhi), (vlo, vhi) = ext["walls_uv"]
+    return (u < ulo - margin) | (u > uhi + margin) | (v < vlo - margin) | (v > vhi + margin)

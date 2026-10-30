@@ -75,3 +75,28 @@ SIGTERM, so `run_jobs` never left its loop. Now:
   evaluation; such a partial model is shipped as the last rung of the ladder (exit 30). r0nb runs only after crashes
   or NaN, not after a timeout.
 Tests: `test_wall_limit_kills_a_trainer_that_ignores_sigterm`, `test_stall_watchdog_stops_a_silent_trainer`.
+
+## 1920 px timing and new defaults (review fixes #4/#10, 30 Oct)
+Before 30 Oct every 30k run used about 0.73 MP frames (735x990). The room's 4K video becomes 1920x1080 frames.
+`python -m pipeline.train.bench --data /w/runs/rh-mip1920/30_undist --out /w/runs/fix-bench --long-side 1920,1600
+--steps 9000` ran the pipeline's r0 recipe (MCMC, 1.5 M cap, antialiased, bilateral grid, scene-unit noise) for
+9,000 steps at each size, one after the other; it finished at 14:15 on 30 Oct (file times). The GPU had 2.3 GB in use by another
+team at the start and no other training job. Results (`/home/sher/namma-space/runs/fix-bench/bench.json`):
+
+| Frames | Rate after the cap (step 7,900) | Wall for 9k steps | Peak GPU (whole card) | Projected 30k |
+|---|---|---|---|---|
+| 1919x1278 (2.45 MP) | 6.48 it/s (154 ms/step) | 624 s | 5.7 GB | 64.4 min |
+| 1600x1066 (1.71 MP) | 8.53 it/s (117 ms/step) | 491 s | 5.5 GB | 49.2 min |
+
+The projection keeps the measured time to step 9,000 and runs the rest at the end rate x 0.78, the slow-down that
+w3-honka r1 showed after step 9k when it ran alone. So it is an estimate, and a GPU shared with another job will be
+slower (two jobs ran at about half speed each on 30 Oct).
+
+Root's rule: train at full 1920 px if the projection stays under about 75 min, else 1600 px. 64.4 min passes, so:
+- `--long-side` default 1920 (frames are never upscaled; larger frames are resized into `50_train.tmp/data` and the
+  copy is deleted after training). `--long-side 1600` is the fallback when time is short.
+- `--variants` default `r0`; `--variants r0,r1` adds the depth-loss variant (+0.09 dB on honka, crashed on vr_room).
+- `--max-minutes` default 150 per variant (was 90); the runner's train stage limit is 330 min (was 240), so even two
+  variants run one after the other cannot be killed by the runner while one 30k model is finished.
+- `train.json` records `frame_size_in`, `frame_size_train`, `long_side` and `max_minutes`.
+Tests: `test_stage_fake.py::test_default_is_r0_only_with_150_min_limit`, `ResizeTest` (PIL; runs in the container).

@@ -11,11 +11,14 @@ from typing import Optional
 
 import numpy as np
 
-from . import colmapio, extent as extent_mod, frame, minimap as minimap_mod, pngio, viewpoints
+from . import colmapio, extent as extent_mod, frame, minimap as minimap_mod, pngio, raster, viewpoints
 from .plyio import read_splats
 from .walkable import Params, build, eye_violations, measure_floor_offset
 
 SCHEMA = "namma-space/grid@1"
+WALL_MARGIN_M = 0.15    # walkable cells this far past an outer wall are outside the room ...
+DOOR_KEEP = 0.35        # ... unless within this x H_cap of the capture path (the doorway the phone stood in)
+ROOM_MARGIN_M = 0.30    # the minimap paints floor and obstacle cells up to this far past the walls
 PLY_CANDIDATES = ("60_export/clean.ply", "60_export/splat_clean.ply", "60_export/cleaned.ply",
                   "60_export/splat_hd.ply", "60_export/splat_sd.ply")
 
@@ -191,6 +194,41 @@ def run_stage(run_dir: str, out_dir: Optional[str] = None, ply: Optional[str] = 
     lay = state.layout
     walk = state.walkable
     info = dict(state.info)
+
+    # ---- room extent; walkable cells past the outer walls (a doorway tail into unreconstructed space) are cut,
+    # except within DOOR_KEEP x H_cap of the capture path, where the phone stood (review #43, 30 Oct)
+    t0 = time.time()
+    ext = None
+    if len(state.obst_xz):
+        oi, oj = np.nonzero(state.obstacle)
+        ox_, oz_ = lay.xz(oi, oj)
+        ext = extent_mod.room_extent(np.stack([ox_, oz_], axis=1), state.obst_xz, centres[:, [0, 2]], cell=cell, seed=seed)
+    if ext is None:
+        warnings.append("room extent not measured: no wall-like obstacle columns found")
+    room_cells = state.floor | state.obstacle
+    if ext is not None:
+        ai, aj = np.nonzero(np.ones_like(walk))
+        ax, az = lay.xz(ai, aj)
+        beyond = extent_mod.outside_walls(ax, az, ext, WALL_MARGIN_M).reshape(walk.shape)
+        room_cells = room_cells & ~extent_mod.outside_walls(ax, az, ext, ROOM_MARGIN_M).reshape(walk.shape)
+        if mode == "grid":
+            cut = walk & beyond & (state.d_path > DOOR_KEEP * h_cap)
+            info["walkable_cut_outside_walls_cells"] = int(cut.sum())
+            if cut.any():
+                walk = walk & ~cut
+                lab, n = raster.label4(walk)
+                if n > 1:
+                    ci, cj = lay.ij(centres[:, 0], centres[:, 2])
+                    okc = lay.inside(ci, cj)
+                    lbl = lab[ci[okc], cj[okc]]
+                    lbl = lbl[lbl > 0]
+                    best = int(np.bincount(lbl).argmax()) if len(lbl) else int(np.bincount(lab.ravel())[1:].argmax()) + 1
+                    walk = lab == best
+                state.walkable = walk
+                sp2, rl2 = viewpoints.choose_spawn(cams, lay, walk)
+                if sp2 is not None:
+                    spawn_idx, relaxed = sp2, rl2
+    timings["extent_s"] = round(time.time() - t0, 3)
     warnings += [f"spawn rule relaxed: {r}" for r in relaxed]
 
     # ---- independent re-check of the eye test on the final mask
@@ -216,19 +254,12 @@ def run_stage(run_dir: str, out_dir: Optional[str] = None, ply: Optional[str] = 
         warnings.append("no spawn found")
     timings["viewpoints_s"] = round(time.time() - t0, 3)
 
-    # ---- room extent, floor offset
+    # ---- floor offset
     t0 = time.time()
-    ext = None
-    if len(state.obst_xz):
-        oi, oj = np.nonzero(state.obstacle)
-        ox_, oz_ = lay.xz(oi, oj)
-        ext = extent_mod.room_extent(np.stack([ox_, oz_], axis=1), state.obst_xz, centres[:, [0, 2]], cell=cell, seed=seed)
-    if ext is None:
-        warnings.append("room extent not measured: no wall-like obstacle columns found")
     floor_off = measure_floor_offset(splats, state.d_path, lay, h_cap, floor_y)
     if floor_off is not None and abs(floor_off) > 0.05 * h_cap:
         warnings.append(f"measured floor is {floor_off * 100:+.1f} cm from y = {floor_y}: check T_final")
-    timings["extent_s"] = round(time.time() - t0, 3)
+    timings["floor_offset_s"] = round(time.time() - t0, 3)
 
     # ---- bounds for the scene
     y = splats.xyz[:, 1]
@@ -241,7 +272,7 @@ def run_stage(run_dir: str, out_dir: Optional[str] = None, ply: Optional[str] = 
     t0 = time.time()
     grid_u8 = state.to_u8()
     ppm = minimap_mod.choose_px_per_m(lay)
-    mini = minimap_mod.render(splats, lay, walk, ppm, floor_y=floor_y)
+    mini = minimap_mod.render(splats, lay, walk, ppm, floor_y=floor_y, room=room_cells)
     timings["minimap_s"] = round(time.time() - t0, 3)
 
     walkable_m2 = float(walk.sum()) * cell * cell
@@ -259,6 +290,7 @@ def run_stage(run_dir: str, out_dir: Optional[str] = None, ply: Optional[str] = 
         "user_scale": float(export.get("user_scale", 1.0) or 1.0) if tf_used else 1.0,
         "room_extent_axes_m": ext["extent_axes_m"] if ext else None,
         "room_axes_yaw_deg": ext["axes_yaw_deg"] if ext else None,
+        "room_walls_uv": ext.get("walls_uv") if ext else None,
         "walkable_m2": round(walkable_m2, 3),
         "path_coverage": round(cov, 4),
         "mode": mode,

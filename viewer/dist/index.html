@@ -14,6 +14,11 @@
   "@sparkjsdev/spark": "./vendor/spark.module.js"
 } }
 </script>
+<!-- Start the three big files in parallel now. Without this the browser finds three.core.js only after it has read three.module.js. -->
+<link rel="modulepreload" href="./vendor/three.module.js">
+<link rel="modulepreload" href="./vendor/three.core.js">
+<link rel="modulepreload" href="./vendor/spark.module.js">
+<link rel="modulepreload" href="./js/main.js">
 </head>
 <body>
 <script>
@@ -97,10 +102,11 @@
   <div class="maplabel"><span id="map-title">Map</span><span class="dim">click to jump</span></div>
 </div>
 
-<div id="loader" class="panel">
-  <div id="loader-title">Loading scene</div>
+<div id="loader" class="panel wait">
+  <div id="loader-title">Namma Space</div>
   <div class="bar"><i id="bar-fill"></i></div>
-  <div id="loader-sub" class="dim">&nbsp;</div>
+  <div id="loader-sub" class="dim">Loading the 3D viewer code. This takes longer on a slow link.</div>
+  <noscript><div class="dim">This page needs JavaScript.</div></noscript>
 </div>
 
 <div id="start" class="overlay" hidden>
@@ -125,12 +131,12 @@
       <div>
         <h2>Five-minute judge path</h2>
         <ol class="path">
-          <li><b>Walk</b> for a minute. Walk into a wall: you stop and slide along it.</li>
+          <li><b>Walk</b> round the room for a minute. Walls and furniture stop you, and you slide along them.</li>
           <li><b>Map</b> (<kbd>M</kbd>): click a far corner and look back across the room.</li>
           <li class="needs-places" hidden><b>Find</b> (<kbd>/</kbd>): type a room or item. Press Route to see the walking path round the furniture, then Follow.</li>
           <li><b>Reality check</b> (<kbd>C</kbd>): drag the slider between a held-out photo and the live render.</li>
           <li><b>Tour benchmark</b> (<kbd>T</kbd>): a fixed 60 s walk that prints fps, p95, splats, MB and GPU.</li>
-          <li><b>Scale</b>: the stats badge gives the size error we measured. Press <kbd>K</kbd> and click two points to measure with it.</li>
+          <li id="path-scale"><b>Scale</b>: the stats badge shows an estimate of the scale and its 68% range, from camera height. It is not a measured error. Press <kbd>K</kbd> and click two points to measure.</li>
         </ol>
       </div>
     </div>
@@ -155,7 +161,7 @@
       <tr><td><kbd>C</kbd></td><td>reality check: photo against render; <kbd>&larr;</kbd><kbd>&rarr;</kbd> change photo</td></tr>
       <tr class="needs-places" hidden><td><kbd>/</kbd></td><td>search rooms and items by name (Round 2 preview); Enter picks the top match</td></tr>
       <tr class="needs-places" hidden><td><kbd>J</kbd> <kbd>G</kbd> <kbd>Space</kbd></td><td>jump to the picked place &middot; show the walking route &middot; follow the route</td></tr>
-      <tr><td><kbd>K</kbd></td><td>measure: click two points; shows metres and the scale error</td></tr>
+      <tr><td><kbd>K</kbd></td><td>measure: click two points; shows metres and the estimated scale range</td></tr>
       <tr><td><kbd>P</kbd></td><td>add a place (owner tool): click a spot, name it, then copy the places JSON</td></tr>
       <tr><td><kbd>L</kbd></td><td>copy a link that opens this scene at this spot</td></tr>
       <tr><td><kbd>F</kbd></td><td>fly mode (passes furniture, stays inside the room)</td></tr>
@@ -175,7 +181,7 @@
 </div>
 
 <div id="errcard" class="overlay" hidden>
-  <div class="card narrow"><h1 id="err-title">Could not load the scene</h1><p id="err-msg"></p></div>
+  <div class="card narrow"><h1 id="err-title">Could not load the scene</h1><p id="err-msg"></p><button class="go small" type="button" onclick="location.reload()">Reload the page</button></div>
 </div>
 
 <div id="reality" hidden>
@@ -205,7 +211,7 @@
 <div id="bottom" class="panel" hidden>
   <button id="b-hd" hidden>HD</button>
   <button id="b-measure" type="button" hidden>Measure</button>
-  <span class="dim" id="b-hint">WASD walk &middot; Shift run &middot; M map<span class="needs-places" hidden> &middot; / search</span> &middot; K measure &middot; ? help</span>
+  <span class="dim" id="b-hint"><span id="hint-desk">WASD walk &middot; Shift run &middot; M map<span class="needs-places" hidden> &middot; / search</span> &middot; K measure &middot; ? help</span><span id="hint-touch" hidden>left thumb walks &middot; right thumb looks &middot; tap the map to enlarge</span></span>
 </div>
 
 <div id="toast" hidden></div>

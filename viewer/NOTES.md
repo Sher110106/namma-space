@@ -1,6 +1,8 @@
-# WP5 viewer and bundle: notes
+# Viewer and bundle tool: notes
 
-Owner: W5. Everything here ran on the Mac (Apple M1, headless Chrome 156 with Metal ANGLE) unless a line says tyrone.
+Working notes from the build. AI coding agents wrote them during the build; "W1" to "W7" and "root" are the work packages and the coordinating session named in CONTRACTS.md (W5 is this package). Nothing here is a claim about a result unless a number and a test name sit beside it.
+
+Everything here ran on the Mac (Apple M1, headless Chrome 156 with Metal ANGLE) unless a line says tyrone.
 Numbers below are measured in this session on the test fixture; nothing here is a result on the user's own room.
 
 ## What is in the folder
@@ -17,6 +19,7 @@ viewer/
   test/fixtures/honka_run/   fake run dir (CONTRACTS 2.11 layout) built from the honka smoke run: the TEST FIXTURE
   test/fixtures/honka_places.json   8 placeholder places for the fixture (passed to bundle.py with --places)
   test/last_run/         verify.json and shots from the last full run
+  places/                rh-honka.json, rh-vrroom.json: hand-placed places for the two public demo rooms (see "Review fixes 30 Oct", finding 16/45); shots/ has one jump-view screenshot per place
   dist/                  bundle.py output for the fixture: a working site (26 MB; scene honka_demo)
 ```
 
@@ -59,7 +62,7 @@ Files: SD 800k splats SH1 = 15.5 MB (`splat_sd.spz`, SPZ v3), preview 150k SH0 =
 | H4 | browser render vs undistorted photo at 3 training poses: 21.3 / 22.8 / 22.0 dB; the same poses turned 10 deg: 10.9 / 11.2 / 13.8 dB (gain 8.3-11.6 dB). Held-out poses 20.0-22.3 dB, matching gsplat's own 20.6 dB for this run | >= 18 dB and >= 3 dB gain |
 | H4b | browser vs gsplat render of the same file: see the H4b line in "Open items" | >= 25 dB |
 | H5 | touch emulation 844x390: left thumb moved the player 1.3-1.5 m, right thumb turned 22.9 deg, start button tapped by touch | moves |
-| H6 | `?stress=1` (pixel ratio 2): governor stepped to 1.4 at 1.8-1.9 s after the first splat frame | <= 3 s |
+| H6 | `?stress=1` (pixel ratio 2): governor stepped to 1.4 at 1.8-1.9 s after the first splat frame. Since 30 Oct a step down is a trial and goes back if the frame rate does not rise by 10% (see "Review fixes 30 Oct", finding 15); on a busy Mac it sometimes goes back to 2 | <= 3 s |
 | H7 | `?asset=` from a second origin with CORS: loaded, 800k splats; origin without CORS: falls back to the scene's own file | loads |
 | H8 | bundle.py output: 73 checks, 0 failed; 6 of 6 corrupted copies rejected (missing key, size mismatch, missing grid, wrong count, wrong grid dims, missing held-out photo) | valid |
 | H9 | server throttled to 2.5 MB/s: first frame 2.4-2.5 s (preview), SD fully loaded 8.7-8.8 s (preview 2.5 MB then SD 15.5 MB, in that order) | <= 18 s, <= 4 s |
@@ -94,7 +97,7 @@ Tuning matrix on W3's 1.0 M-splat file, tour benchmark, 15 s each (`?bench=1&ben
 | sqrt(8) + `sortRadial` false | 48.2 | 50 |
 | sqrt(8) + `minSortIntervalMs` 40 | 50.1 | 50 |
 
-So fill rate, not sorting, is what the M1 runs out of at 1.0 M splats. Decision: the SD preset ("standard") starts at sqrt(5) (Spark's own docs call it perceptually very similar); the HD preset ("full") uses `scene.splats.render.maxStdDev` (sqrt(8)). PSNR against photos did not change (H4 21.3/22.8/22.0 both ways). Governor ladder (`governor.js`): standard -> low (pixel ratio 0.85) -> min (0.7); stress adds 2.0 and 1.4 on top. Rule as in the plan: mean fps < 40 over 2 s steps down; median fps > 55 over 2 s steps up, with an 8 s hold-off after a step down. Pixel ratio starts at 1 (0.85 when the GPU string looks integrated or mobile, 0.7 for software rendering).
+So fill rate, not sorting, is what the M1 runs out of at 1.0 M splats. Decision: the SD preset ("standard") starts at sqrt(5) (Spark's own docs call it perceptually very similar); the HD preset ("full") uses `scene.splats.render.maxStdDev` (sqrt(8)). PSNR against photos did not change (H4 21.3/22.8/22.0 both ways). Governor ladder (`governor.js`): standard -> low (pixel ratio 0.85) -> min (0.7); stress adds 2.0 and 1.4 on top. Rule as in the plan: mean fps < 40 over 2 s steps down; median fps > 55 over 2 s steps up, with an 8 s hold-off after a step down. Since 30 Oct every step down is a trial: it stays only if the frame rate rises by at least 10%; a capped frame rate (battery saver, half-rate vsync, a background tab) does not rise, so the step goes back (finding 15). Pixel ratio starts at 1 (0.85 when the GPU string looks integrated or mobile, 0.7 for software rendering).
 
 ## Decisions and traps
 
@@ -116,12 +119,12 @@ So fill rate, not sorting, is what the M1 runs out of at 1.0 M splats. Decision:
 - `60_export/export.json`: `T_final` as `{scale, quaternion[x,y,z,w], translation}` (W3's shape; also accepts `position`, a 4x4 matrix, or the `matrix` key W3 writes, row-major 16 numbers), `sd/hd/preview.{count, mb, sh, psnr}` (counts are taken from the SPZ header when readable, v1-v4), and an optional `render` block `{antialiased, preBlurAmount, blurAmount, maxStdDev}`. **W3: please write `render`.** Without it bundle.py assumes antialiased training (preBlur 0, blur 0.3) and warns.
 - `60_export/heldout/heldout.json`: list of entries exactly as in scene.json (`id, photo, position, quaternion, fov_y_deg, principal_point, aspect, psnr`) next to the photos. Matches `pipeline/export/heldout.py`; `psnr: null` is accepted.
 - `70_grid/grid.json`: `origin_xz, cell, spawn, bookmarks, tour` (dense tours are fine), optional `bounds`, `eye_height_m`, `floor_y`, `minimap.px_per_m`. Matches `pipeline/grid/stage.py`. `grid.png` and `minimap.png` are read for their size; grid values must be 0/128/255.
-- `40_align/align.json`: `scale.{value, pct_68, method, cues, checked_against}`, `h_cap_m` (used for the eye height if grid.json has none). `50_train/train.json`: chosen variant's `psnr, ssim, lpips, cc_psnr` go into `metrics`. `input/meta.json` and `run.json` (`git`) are optional.
+- `40_align/align.json`: `scale.{value, pct_68, method, cues, checked_against}`, `h_cap_m` (used for the eye height if grid.json has none). `50_train/train.json`: chosen variant's `psnr, ssim, lpips, cc_psnr` go into `metrics`. `40_align/rescale.json` (optional): when it has `checked_against` and `validation.n_used`, `scale.checked_against`, `scale.check_error_pct` (from `validation.auto_error_pct`) and `scale.check_n` are filled; without it the scene says the scale is an estimate. `input/meta.json` and `run.json` (`git`) are optional.
 - Eye height: `--eye-height`, else grid.json `eye_height_m`, else `align.h_cap_m`, else 1.42; clamped to 1.2-1.8 m.
 
 ## Features beyond P0 that are built and tested
 
-Preview-then-full loading (preview first, SD swapped in after 8 frames); HD button (swaps `splat_hd`, switches to the `full` preset); tour benchmark T (also `?bench=1`, `?benchsecs=` compresses it; result card with Copy button); reality check C; bookmarks 1-5; touch; fly mode F; `L` copies a spot link (`?scene=&pose=`); other scenes listed on the start card; weak-GPU fallback (the last governor step swaps to the 200 k-splat preview; two consecutive frames over 400 ms step down at once); software rendering (SwiftShader, detected from the GPU string) starts on the preview at pixel ratio 0.5 with a toast, `?q=sd` overrides; a download that shows no byte for 20 s is retried (the scene's own file if `?asset=` failed).
+Preview-then-full loading (preview first, SD swapped in after 8 frames); HD button (swaps `splat_hd`, switches to the `full` preset; bundle.py leaves HD out when it is byte-identical to SD, and the viewer shows no button then); tour benchmark T (also `?bench=1`, `?benchsecs=` compresses it; result card with Copy button); reality check C; bookmarks 1-5; touch; fly mode F; `L` copies a spot link (`?scene=&pose=`); other scenes listed on the start card; weak-GPU fallback (the last governor step swaps to the 200 k-splat preview; two consecutive frames over 400 ms step down at once); software rendering (SwiftShader, detected from the GPU string) starts on the preview at pixel ratio 0.5 with a toast, `?q=sd` overrides; a download that shows no byte for 20 s is retried (the scene's own file if `?asset=` failed).
 
 SwiftShader check (headless Chrome with `--use-angle=swiftshader`, Mac under load): SD at 800k splats gave 0.1-8 fps and the governor never moved before the emergency rule existed; with it the viewer drops to the preview within two slow frames. The preview itself still ran at about 0.6 fps in software on the loaded Mac, so a machine with no GPU acceleration will not be pleasant; this is a floor, not a promise.
 
@@ -129,7 +132,7 @@ Offline copy: `bundle.py --zip out.zip` writes the web folder plus `START_HERE.t
 
 ## Round 2 preview: places, search, route, follow, place editor, measure (30 Oct, P2/P3)
 
-Built and tested on the fixture. Everything the user sees that belongs to Round 2 (search, jump to a place, route, follow) carries the label "Round 2 preview" (search box footer, place card, start card). Round 1 (roaming) does not depend on any of it: with `places: []` the search button and the search lines on the start card and help stay hidden; K (measure) and P (place editor) still work.
+Built and tested on the fixture. The two public demo bundles (rh-honka with 6 places, rh-vrroom with 7) now carry hand-placed places from `viewer/places/`, so search, jump, route and follow show there (30 Oct, findings 16 and 45). Everything the user sees that belongs to Round 2 (search, jump to a place, route, follow) carries the label "Round 2 preview" (search box footer, place card, start card). Round 1 (roaming) does not depend on any of it: with `places: []` the search button and the search lines on the start card and help stay hidden; K (measure) and P (place editor) still work.
 
 ### What the user gets
 
@@ -141,7 +144,7 @@ Built and tested on the fixture. Everything the user sees that belongs to Round 
 | Route | glowing chevron ribbon on the floor (y = floor_y + 0.03) and a line with arrows on the minimap; "11 m left, about 8 s on foot" at the scene's walk speed (1.4 m/s), live; re-plans when the player is more than 0.5 m off the path |
 | Follow | the player auto-walks the route at walking speed, turns to face the place, "Arrived: <name>"; any move key stops it; a route blocked for 2 s re-plans once, then stops with a message |
 | pin | marker with name and distance, scaled by distance (0.8x-1.35x) and always readable; off screen it becomes an edge arrow; labels step out from under panels; also a diamond on the minimap (click it to select; the large map labels every place) |
-| `K` | measure: click two points (phones: the Measure button in the bottom bar, then tap); shows metres, the 68% interval from `scale.pct_68` and the scale method; clicks use a splat raycast, floor plane when no splat is hit |
+| `K` | measure: click two points (phones: the Measure button in the bottom bar, then tap); shows metres, the estimated 68% range from `scale.pct_68` (labelled an estimate; a tape check from `40_align/rescale.json` shows as "tape check +x.x%" instead) and the scale method; clicks use a splat raycast, floor plane when no splat is hit |
 | `P` | add place (owner tool): click a spot, type a name, pick room / item / zone, optional other names; stored in this browser (localStorage, per scene) and added to the search at once; "Copy places JSON" copies scene places plus the new ones (a text box opens if the browser refuses the clipboard) |
 | URL | `?place=<id>` selects, `&route=1` draws the route, `&follow=1` starts following (once the start card is closed) |
 
@@ -159,7 +162,7 @@ Built and tested on the fixture. Everything the user sees that belongs to Round 
 
 ### Known limits (read before quoting any of this)
 
-- Every number above is on the honka fixture. Its grid is a placeholder and walks through the table; its place positions were picked with the viewer's own pick tool and are only meant to exercise the code. Its floor is not at y = 0: the median of 19 splat hits on floor-ward rays was -0.67 m (most between -0.05 and -1.1, a few outliers further down), because the fixture's scale and floor were assumed. The route ribbon therefore floats above the visible floor in the fixture. On a real run `frame.floor_y` and the grid come from W4/W3; check `frame.floor_y` against the splat floor on the user's room before filming the route.
+- The places in the two public bundles were placed with the place editor on 30 Oct and checked in screenshots (one screenshot per place, jump view); no route was walked on those real grids except by tests R1-R5 and R8 (see Review fixes). Every number above is on the honka fixture. Its grid is a placeholder and walks through the table; its place positions were picked with the viewer's own pick tool and are only meant to exercise the code. Its floor is not at y = 0: the median of 19 splat hits on floor-ward rays was -0.67 m (most between -0.05 and -1.1, a few outliers further down), because the fixture's scale and floor were assumed. The route ribbon therefore floats above the visible floor in the fixture. On a real run `frame.floor_y` and the grid come from W4/W3; check `frame.floor_y` against the splat floor on the user's room before filming the route.
 - The route follows the grid. If the grid marks something walkable that is not (or blocks a real doorway), the route is wrong in the same way; the Round 2 claim is only as good as `grid.png`.
 - The measure tool reports the distance between two splat surfaces. Its accuracy is the scene's scale accuracy (`pct_68`) plus the depth error of the splat picked, which the tests do not measure (no ground truth on the fixture; the floor-plane pair is exact to the mouse pixel).
 - Not tested: real pointer lock (Follow and the tools release it, so they do not depend on it), Safari, Firefox, a phone browser, `navigator.clipboard` over plain http (the text box fallback exists and was exercised headless).
@@ -184,7 +187,7 @@ Built and tested on the fixture. Everything the user sees that belongs to Round 
 - `./ns bundle` needs no change; add `--places runs/<name>/places.json` only if the file lives elsewhere.
 - Check `frame.floor_y` and `grid.png` on the user's room before recording the route (see Known limits). If the ribbon floats or sinks, tell W4/W3; the viewer only reads `floor_y`.
 - For the video: `?place=<id>&route=1&follow=1` opens a walk to a place; press the start button and it walks. `?keys=1` still shows the key overlay.
-- The `video_url` for the WebGL2-missing card is filled by `--video-url`; empty means no link is shown.
+- The `video_url` for the WebGL2-missing card is filled by `--video-url`; empty means no link is shown. A rebuild without `--video-url` now keeps the link already in the bundle's index.html. `./ns bundle` passes none; root: pass it once the video is uploaded.
 - No change to CONTRACTS was needed. Open question for root: `scene.json.splats.render.maxStdDev` is now read as the HD value; SD always caps at sqrt(5).
 
 ## Failures and false starts (for the failure table)
@@ -208,3 +211,92 @@ Built and tested on the fixture. Everything the user sees that belongs to Round 
 - Not measured: any GPU other than the M1; Safari, Firefox, Android Chrome, WhatsApp in-app browser; real pointer lock.
 - P2/P3 are built (places, search, measure, spot links, route, follow, place editor); see "Round 2 preview". Not built: multi-floor, doors that open, semantic search, voice.
 - A hosted copy does not exist (no publishing was done). `dist/` is the offline copy: `python3 -m http.server` in that folder is enough.
+
+## Review fixes 30 Oct
+
+An independent review (each finding confirmed by a second reviewer) listed the problems below. A first fixer began and stopped when the server restarted. The second fixer checked that work (ran its tests, looked at the diff), finished what was half done and added what was left. One entry per finding number. Test ids are the ones in `test/tests.mjs`, `test/tests_guide.mjs`, `test/unit.mjs` and `test/test_bundle.py`.
+
+**15 Governor drops quality when the frame rate is capped or paused: fixed.**
+- `governor.js`: a step down is now a trial. It stays only if the mean frame rate rises by at least 10% in the next 2 s window. A capped rate (battery saver, half-rate vsync) cannot rise, so the step goes back, and no new step down happens until the rate falls to 80% of the capped one.
+- Added by the second fixer: a cap can hide behind a loading hiccup. If the first window reads low, the first step looks like a gain and only the second step shows the cap. X13 caught this on the busy Mac (history `low, min, low`, ended at pixel ratio 0.85). Now, when a trial fails after earlier steps of the same run were kept, the governor measures the top of the run again and keeps the top if the rate there is within 10% (`verify`). X13 then ended on `standard`.
+- A frame longer than 2 s counts as a pause and is dropped. The "keep at least 3 samples" rule is gone. `visibilitychange` and `pageshow` clear the frame timer and the samples (`main.js`); leaving the benchmark or the reality check clears them too.
+- The emergency rule stays (two frames in a row over 400 ms step down at once).
+- The "low" step is left out when it equals "standard" (weak GPUs start at 0.85). The "Quality: x" and "Reduced detail" toasts show only after a trial is kept.
+- A step up that drops the rate under 40 again blocks that level for 60 s, so the viewer does not flip between the preview and SD.
+- Tests: unit 29 of 29 (capped at 30, 35 and 38 fps; capped with a slow start; a real drop to 20 fps after a cap; a GPU-bound stressed run; hidden tab; emergency; ladder). Browser: X13 (page capped at 30 fps), X15 (6 s pause), H6 (`?stress=1`), X11 (preview step). Results are in the table below.
+- Stressed run, measured with the governor off (M1 under load average about 25): 2.0 gave 17-25 fps, 1.4 gave 30-33, 1.0 gave 44-46, 0.85 gave 47-55 fps. On the first full run H6 stepped to 1.4 and then went back to 2.0, because 1.4 gave under 10% more than the 26.6 fps before. On the second run it kept 1.4. Both runs pass H6 (a step within 3 s); which one you see depends on the host load.
+- Not done: no real battery-saver or Low Power Mode test (no such device here). The cap is simulated by limiting `requestAnimationFrame` in the page. A tab hidden for real was not tested either; headless Chrome keeps running frames.
+
+**40 A failed SD download replaces a working preview with an error card: fixed.**
+- `main.js loadSplats`: any failure (reset, drop, 5xx, 20 s silence) now gets one retry from the same URL (or the scene's own file when `?asset=` failed). If the retry also fails and the preview is on screen, the viewer keeps the preview, hides the loader, and shows a 9 s toast ("The full-quality file did not load. Showing the preview ... Reload the page to try again."). The error card shows only when nothing renders. The error card has a "Reload the page" button. A failed HD download keeps SD and shows a toast.
+- Test X14 (4 cases with injected failures: HTTP 500 every time; connection cut after 1 MB every time; first request fails and the retry works; no preview in the scene and SD fails). In the first two the player stays on the preview and walks 0.9 m with W; in the third SD loads after the retry; in the fourth the error card has its Reload button.
+- Not done: `./ns bundle` still passes no `--video-url` (`ns` belongs to root). bundle.py now keeps the link already in `index.html` on a rebuild without the flag (`test_video_link_survives_a_rebuild`). Root: pass `--video-url` once the video is uploaded.
+
+**46 Close-to-wall poses show the dark clear colour: fixed as a mask, not as a cure.**
+- `bundle.py` writes `splats.render.clear_color` into scene.json: the mean colour of up to 16 held-out photos, mostly grey (40% of the colour kept), brightness limited to 40-120. Fallbacks: the minimap, then a fixed grey (60, 58, 55). Public bundles: honka [125, 119, 113], vr_room [121, 120, 117] (mean of 8 held-out photos each).
+- `main.js` keeps the dark page colour (11, 14, 20) until the first splat frame, because the first-frame probe compares pixels with it. Then it switches to the scene colour (`useSceneClear`). Test X18 checks both.
+- This hides holes; it does not fill them. The verifier measured that H4b at rh-phone 000012 still scores about 20.5 dB. Not done: the verifier's `clipXY: 2` for Spark (removes the off-screen cull hole, +0.1 to +0.6 dB on the parity poses). I did not measure its frame-rate cost on a weak GPU, so I left it out.
+
+**48 About 5 MB of JS loads before any progress feedback: fixed (text and preload; the libraries stay as they are).**
+- `index.html`: the loader panel is in the HTML with the line "Loading the 3D viewer code. This takes longer on a slow link.", a sliding bar (CSS, off for reduced motion) and a `<noscript>` line. `main.js` changes the line to "Viewer code loaded. Reading the scene description." and "Loading the room files." while it boots; the splat byte count takes over once bytes arrive. `modulepreload` links for three, three.core, Spark and main.js start the downloads in parallel.
+- Test X17 delays `spark.module.js` by 2.5 s and checks the text, the sliding bar, 4 preload links, and that the loader goes away after the load.
+- Not done: minified builds (the verifier measured about 230 KB less gzipped, about 0.5 s at 4 Mbps, for re-hashing the vendor files the day before the deadline). The host has to gzip JS (GitHub Pages does; the offline zip does not).
+
+**49 Touchscreen laptops get the phone path: fixed.**
+- `main.js`: the touch path is on only when the main pointer is not fine and hover-capable (`(pointer: fine)` and `(hover: hover)` both match means desktop). A touchscreen laptop keeps "Click to start", the "Click to resume" pill, the desktop hint bar and pointer lock. A mouse that moves on a device that first looked like a tablet switches it to the desktop path. A start click by touch (`pointerType touch`) still skips the lock. The hint bar and the Measure button follow the same flag (`applyTouchUi`).
+- Test X16: a page with `maxTouchPoints 5` and `ontouchstart` but a fine pointer gets the desktop path and one pointer-lock request after a mouse click; a 390x844 touch phone still gets "Tap to start". H5 and R10 (phone touch) still pass.
+- Not tested: a real Windows touchscreen laptop.
+
+**29 The scale badge says "measured" but shows a fixed prior: fixed.**
+- New `scaleInfo()` in `scene.js` is the single source for the badge, the HUD chip, the measure tool and the start card. Without a tape check it prints "est. ±13%" and "Estimated scale, 68% range ±13%. It comes from a prior on camera height; it is not a measured error." The chip reads "scale est. ±13%".
+- `bundle.py` now reads `40_align/rescale.json`. When it has `checked_against` and `validation.n_used`, scene.json gets `scale.checked_against`, `scale.check_error_pct` and `scale.check_n`, and the viewer shows "tape check +2.1%" (no range from the prior). Test `test_tape_check_reaches_scene_json_only_through_rescale_json`; unit test for the text.
+- The start card line 6 says the badge is an estimate and not a measured error; it changes when the scene was checked. Tests: R6 and the unit test.
+- Not done: the LiDAR-measured error (3.3% honka, 3.1% vr_room) is not in the badge. Those come from `eval/results`, not from the run.
+
+**44 / 22 Wording, internal files and git markers: partly fixed.**
+- Fixed in my files: start card step 1 no longer sends the judge into a wall ("Walk round the room for a minute. Walls and furniture stop you, and you slide along them."); step 6 and the K help line (finding 29); the lede reads "a Gaussian-splat reconstruction of a real room" (no "photoreal twin"; fixtures say only "reconstruction"); the HUD chip says "scale est. ±13%". The top of this file says AI agents wrote these notes and what "W1" to "W7" and "root" mean.
+- Not mine (docs, README, pipeline, ns): the PoC "H: help", the "not built" lines for search and routes in the abstract, narration, captions, storyboard and limits card (places now exist in the two public bundles, so those texts need the "Round 2 preview" wording; see 16/45), the README note on honka's exit 30 and the up error, moving the dev logs.
+- Git markers: scene.json `build.git` comes from `run.json` of the run (`2a5add6-dirty`, `a57c8c1-dirty`). Only a commit before the final room run fixes that. Root decides.
+
+**36 Wrong dataset credit in the fixture: fixed.**
+- `run_all.sh` now passes "MuSHRoom dataset (Ren et al. 2024), room honka". The fixture was rebuilt and `test/last_run/shots/r9_start_card.png` was replaced by the full run (it shows the new credit).
+
+**19 / 47 The HD button reloads an identical file: fixed.**
+- `bundle.py`: when `splat_hd.spz` has the same size and SHA-256 as `splat_sd.spz`, the HD entry is dropped, the file is not copied (about 16 MB less per scene) and a warning says so. The viewer shows no HD button. If the sizes, count and SH degree match but the bytes differ, the file is kept with a warning. The validator warns about a bundle whose hd is the same file as sd.
+- The viewer also hides the button for an older bundle that lists an HD entry equal to SD (`hdSameAsSd`). Tests: `HdAndClear` in test_bundle.py (identical dropped, different kept, none), the unit test, X8 (button shown for a real HD file, hidden for an equal one).
+- Public bundles after the rebuild: honka and vr_room have no HD file (their HD was a byte copy of SD). rh-phone was not rebuilt (it has a real SH3 HD).
+- Not mine: the abstract's "HD splats / size" row (prints the same numbers as SD) and the storyboard's HD-toggle shot. Root should change both.
+
+**16 / 45 Search, jump, route and follow hidden in every bundle: fixed for the two public demo rooms.**
+- Places for rh-honka (6) and rh-vrroom (7) sit in `viewer/places/rh-honka.json` and `rh-vrroom.json`. Each entry carries `notes`: "placed by hand with the place editor (build team), 30 Oct". I placed them by driving the viewer's own editor (P, click on the canvas, name, other names, kind, Enter) from a stand point chosen in a screenshot; the click is the editor's nine-ray splat pick. Radius (stand-back distance) was set by hand in the JSON for the large items (table, TVs, mural, painting).
+- Honka: Meeting table, Wall TV, Forest picture, Drinks shelf, Door, Armchair. vr_room: Green sofa, Colourful painting, Wall TV, Fire extinguisher, Door, Sink, VR equipment cabinet. Each has 2-5 other names (tv, television; couch; wash basin; ...).
+- Checked by jumping to each place (`J`) and taking a screenshot (`places/shots/*.jpg`, 800 px, from the final bundles): the pin sits on the named object in all 13. Four changes came out of the check. (1) The first honka "Wall TV" pick sat at x = 5.19, 1.8 m behind the wall: the screen reflects the room and gives no depth. I took the pin from the soundbar under the screen instead (a raycast on a solid object: 14 splat hits on the centre ray, all 8 other rays agree). (2) The first "Windows" place sent the jump to 0.6 m from the blinds, a smear. I dropped it (honka has 6 places). (3) The first vr_room "Door" pin was not clearly on the door; I re-picked it on the door leaf. (4) The vr_room "Wall TV" pin sat on the screen's left edge; I re-picked it at the centre of the screen. The TV stand-back radii were raised (honka 1.0, vr_room 1.2) so the jump view shows the whole screen from the front.
+- `bundle.py --places viewer/places/<run>.json` rebuilds the two public bundles (done here; the pipeline fixer can pass the same files). `ns bundle` does not pick them up by itself, because `ns` reads only `runs/<name>/places.json`. The places sit in the world frame of the current splat files. If the pipeline retrains or re-exports a run, jump to each place again (`J`) and look before shipping: a new frame can move every pin.
+- R1-R5 and R8 now run on the real bundles: see the table below for the results. A route was not walked by hand on these grids, and the honka TV with the first radius (0.8) sent the jump to (3.72, 1.53), where the view was a smear of wall and blinds, probably inside or behind the wall. The grid is not mine; a radius of 1.0 avoids the spot.
+- The docs still say search and routes are "not built" (finding 16 / 44): root changes them to "Round 2 preview: search, jump, route and follow over hand-placed places" for the two public rooms. The user's own room has no places until root adds them.
+- Test: `PublicRoomPlaces` in test_bundle.py (5-7 places per file, unique ids, the provenance note, aliases, surface heights).
+
+### Results after the fixes (30 Oct, about 17:00 IST; M1, headless Chrome 156, other builders kept the Mac busy: load average 15-35)
+
+| Suite | Passed | Failed | Not run | Command |
+|---|---|---|---|---|
+| unit.mjs | 29 | 0 | 0 | `node viewer/test/unit.mjs` |
+| nav_unit.mjs | 19 | 0 | 0 | `node viewer/test/nav_unit.mjs` |
+| test_bundle.py | 29 | 0 | 0 | `python3 viewer/test/test_bundle.py` |
+| fixture (`last_run/verify.json`) | 38 | 0 | 1 (H4b: the fixture has no gsplat reference renders, as before) | `sh viewer/test/run_all.sh` |
+| rh-honka (`runs/rh-honka/90_verify/verify.json`) | 39 | 0 | 0 | `node viewer/test/run.mjs --web runs/rh-honka/80_web --out runs/rh-honka/90_verify --scene rh-honka --parity runs/rh-honka/60_export/parity` |
+| rh-vrroom (`runs/rh-vrroom/90_verify/verify.json`) | 39 | 0 | 0 | same with `rh-vrroom` |
+
+- All R tests (R0-R10) run and pass on both public bundles. Before this work R1-R5 and R8 were "not run: scene has no places" there, and R9 and R10 failed on the vr_room.
+- honka / vr_room: H2 60 fps mean, p95 16.7 / 16.8 ms; H4b 34.22, 35.36, 33.10 dB / 33.53, 34.13, 34.24 dB (the grey clear colour did not change H4 or H4b: honka H4 23.1, 23.46, 21.46 dB as before); H9 first frame 2.80 s / 2.82 s, SD loaded 9.88 s / 9.79 s at 20 Mbps (16.1 / 15.7 MB); X3 tour benchmark 60 fps, p95 16.7 / 16.8 ms. R1: 72 routes (honka, worst 1.032x the grid optimum) and 84 routes (vr_room, worst 1.002x), 0 blocked samples on each; R3 16/16 and 18/18 queries; R4 walked 2.6 m and 3.4 m and ended facing the place.
+- Governor on the three suites: X13 (30 fps cap) ended on `standard` at pixel ratio 1 in every run: history `low:down, standard:revert` (on the busy Mac once `low:down, min:down, standard:revert`); H6 stepped to 1.4 at 1.8-2.2 s and settled at `stress-mid`; X15 had no step judged on the pause.
+- Earlier runs the same day failed, and I fixed the cause each time: X13 and X15 (governor, test too strict about a busy Mac), X8 (the stand-in HD entry equalled SD on a scene whose SD is already SH3), R3 and R5 (hard-coded fixture place names: now built from the scene's own places), R4 on vr_room (yaw measured from the end spot, which is 0.2 m off the stand spot: 6.4 deg at a 1.8 m stand-back; now measured from the stand spot).
+- Numbers from the busy Mac are noisy: an earlier fixture run gave X3 38.5 fps and H6 settled back at 2.0. Quote the final runs above, not those.
+
+### For root
+
+- Commit before the final room run (finding 22): `scene.json build.git` shows `2a5add6-dirty` / `a57c8c1-dirty` for the public runs.
+- `./ns bundle`: pass `--video-url` once the video is uploaded (finding 40), and pass `--places viewer/places/<run>.json` for the two public runs (or copy the file to `runs/<run>/places.json`). A rebuild without them loses the places and the video link; the places do not survive a retrain without a new look.
+- Texts outside my folder that now disagree with the viewer: abstract template, narration, captions, storyboard, render_cards, the PoC "Known limits" and "H: help" (search and routes exist in the two public bundles; HD equals SD there; the badge is an estimate). Findings 16, 19, 22, 44.
+- Findings 20 (first view tilted up) and 39 (wall stand-off) are not in this list. Only the wording of step 1 on the start card changed. The camera fov (`bundle.py`, 70) and the spawn pitch (`pipeline/grid/viewpoints.py`) are unchanged.
+- The user's room: no places yet. Use the editor (P) as for the public rooms, save `runs/<room>/places.json`, rebundle, run the suite (R1-R10 then run on the real grid).

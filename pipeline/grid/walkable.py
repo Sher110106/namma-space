@@ -36,6 +36,12 @@ class Params:
     leash: float = 1.1              # x H_cap
     floor_reach: float = 2.2        # x H_cap: floor evidence farther than this from the path is dropped
     path_walk: float = 0.10         # m: cells this close to the capture path stay walkable (the phone went there)
+    # Eye stand-off (review #39, 30 Oct): the eye stops farther from things at eye level (walls, cupboards, doors)
+    # than the body does from low furniture, so a walk into a wall ends on a readable view, not a smear.
+    eye_standoff: float = 0.28      # x H_cap (0.39 m at 1.4 m), from opaque splats at or above eye_tall x H_cap
+    eye_standoff_max: float = 0.45  # m
+    eye_tall: float = 0.75          # x H_cap
+    eye_path_keep: float = 0.25     # m: cells this close to the capture path ignore the stand-off (doors stay open)
     eye_radius: float = 0.15        # m
     eye_max_count: int = 2
     path_gap_max: float = 1.0       # m: consecutive cameras farther apart are not joined
@@ -246,6 +252,17 @@ def build(splats: Splats, cam_centres: np.ndarray, cam_names: Optional[list[str]
     blocked = near_obst
     # the capture path itself stays walkable: the phone and its holder were there. The eye test below still applies.
     walk = (area & ~blocked) | (F & (d_path <= p.path_walk))
+    if mode == "grid" and len(oxz) and p.eye_standoff > 0:
+        tall = oy >= floor_y + p.eye_tall * h_cap
+        r_eye = max(r_eff, min(p.eye_standoff * h_cap, p.eye_standoff_max) - 0.5 * p.cell)
+        info["eye_standoff_m"] = round(r_eye, 4)
+        if tall.any() and r_eye > r_eff:
+            ci, cj = np.nonzero(walk & (d_path > p.eye_path_keep))
+            x, z = lay.xz(ci, cj)
+            d, _ = cKDTree(oxz[tall]).query(np.stack([x, z], axis=1), k=1, distance_upper_bound=r_eye, workers=-1)
+            near = np.isfinite(d)
+            walk[ci[near], cj[near]] = False
+            info["eye_standoff_cells_removed"] = int(near.sum())
     info["t_inflate_s"] = round(time.time() - t1, 3)
 
     if mode == "corridor":

@@ -18,7 +18,13 @@ Usage:
 Places (Round 2 preview): --places FILE merges named places into scene.json "places". FILE is a JSON list (what the viewer's
 "Copy places JSON" button gives) or {"places": [...]}. Each place: name (required), kind room|item|zone (default item),
 position [x, y, z] in metres or [x, z] (y is then 1.0 for items, 0.0 otherwise), aliases (list or "a, b"), yaw_deg, radius_m, id.
+Each place may also carry "notes" (free text, kept as given: who placed it and how).
 Without --places, RUN_DIR/places.json is used when it exists.
+
+Other things worth knowing (30 Oct review fixes): splat_hd.spz is left out when it is byte-identical to splat_sd.spz (the viewer then shows no
+HD button); scene.json splats.render.clear_color is a neutral colour from the held-out photos' mean (or the minimap, or a fixed grey) that the
+viewer draws behind the splats; scale.checked_against / check_error_pct come from 40_align/rescale.json when a tape check was made; a rebuild
+without --video-url keeps the video link already in out/index.html.
 
 Exit codes: 0 valid, 1 invalid (errors), 2 bad usage / missing inputs.
 """
@@ -27,9 +33,11 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import gzip
+import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -72,6 +80,31 @@ def png_info(path: Path) -> dict[str, Any]:
 
 def png_grey(path: Path) -> tuple[int, int, bytes]:
     """Decode an 8-bit non-interlaced PNG to one byte per pixel (first channel). Enough for grid.png."""
+    w, h, chans, rows = _png_rows(path)
+    out = bytearray(w * h)
+    for y in range(h):
+        line = rows[y]
+        for x in range(w):
+            out[y * w + x] = line[x * chans]
+    return w, h, bytes(out)
+
+
+def png_rgb(path: Path) -> tuple[int, int, list[tuple[int, int, int]]]:
+    """Decode an 8-bit non-interlaced PNG to (r, g, b) tuples; palette images are not supported (ValueError)."""
+    info = png_info(path)
+    if info["ctype"] == 3:
+        raise ValueError(f"{path}: palette PNG not supported here")
+    w, h, chans, rows = _png_rows(path)
+    px = []
+    for y in range(h):
+        line = rows[y]
+        for x in range(w):
+            o = x * chans
+            px.append((line[o], line[o], line[o]) if chans < 3 else (line[o], line[o + 1], line[o + 2]))
+    return w, h, px
+
+
+def _png_rows(path: Path) -> tuple[int, int, int, list[bytearray]]:
     info = png_info(path)
     if info["depth"] != 8 or info["interlace"] != 0 or info["ctype"] not in (0, 2, 3, 4, 6):
         raise ValueError(f"{path}: need 8-bit non-interlaced PNG, got {info}")
@@ -93,7 +126,7 @@ def png_grey(path: Path) -> tuple[int, int, bytes]:
     raw = zlib.decompress(raw)
     w, h = info["width"], info["height"]
     stride = w * chans
-    out = bytearray(w * h)
+    rows: list[bytearray] = []
     prev = bytearray(stride)
     pos = 0
     for y in range(h):
@@ -121,10 +154,9 @@ def png_grey(path: Path) -> tuple[int, int, bytes]:
                 line[i] = (line[i] + pr) & 255
         elif ft != 0:
             raise ValueError(f"{path}: bad PNG filter {ft}")
-        for x in range(w):
-            out[y * w + x] = line[x * chans]
+        rows.append(line)
         prev = line
-    return w, h, bytes(out)
+    return w, h, chans, rows
 
 
 def spz_header(path: Path) -> dict[str, Any] | None:
@@ -221,6 +253,63 @@ def git_rev(cwd: Path) -> str:
         return ""
 
 
+def file_sha256(p: Path) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def same_bytes(a: Path, b: Path) -> bool:
+    """Same size first (cheap), then the same SHA-256."""
+    return a.stat().st_size == b.stat().st_size and file_sha256(a) == file_sha256(b)
+
+
+DEFAULT_CLEAR = [60, 58, 55]
+CLEAR_LUMA = (40, 120)       # keep the clear colour between these grey levels: not a black void, not a bright one
+CLEAR_KEEP_COLOUR = 0.4      # share of the scene's own colour that stays; the rest is grey of the same brightness
+
+
+def neutral_clear(mean_rgb: list[float]) -> list[int]:
+    """A neutral colour from the scene's mean colour: mostly grey of the same brightness, brightness limited to CLEAR_LUMA."""
+    r, g, b = mean_rgb
+    luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    c = [luma + CLEAR_KEEP_COLOUR * (v - luma) for v in (r, g, b)]
+    target = min(CLEAR_LUMA[1], max(CLEAR_LUMA[0], luma))
+    k = target / luma if luma > 1e-6 else 0.0
+    out = [v * k if luma > 1e-6 else target for v in c]
+    return [int(round(min(255, max(0, v)))) for v in out]
+
+
+def scene_clear_colour(held_photos: list[Path], minimap: Path) -> tuple[list[int], str]:
+    """The colour drawn where no splat covers the pixel (a hole, a wall closer than the model has data for).
+    Source 1: mean of the held-out photos (needs Pillow; used when it is installed). Source 2: mean of the minimap pixels that differ
+    from its background. Source 3: a fixed neutral grey. Returns ([r, g, b], source)."""
+    try:
+        from PIL import Image  # optional; the bundle tool needs only the standard library without it
+        acc, n = [0.0, 0.0, 0.0], 0
+        for ph in held_photos[:16]:
+            with Image.open(ph) as im:
+                px = im.convert("RGB").resize((1, 1), Image.BOX).getpixel((0, 0))
+            acc = [a + v for a, v in zip(acc, px)]
+            n += 1
+        if n:
+            return neutral_clear([a / n for a in acc]), f"mean of {n} held-out photos"
+    except Exception:
+        pass
+    try:
+        w, h, px = png_rgb(minimap)
+        bg = px[0]
+        keep = [p for p in px if abs(p[0] - bg[0]) + abs(p[1] - bg[1]) + abs(p[2] - bg[2]) > 40]
+        if len(keep) > 0.02 * len(px):
+            m = [sum(p[i] for p in keep) / len(keep) for i in range(3)]
+            return neutral_clear(m), "mean of the minimap"
+    except Exception:
+        pass
+    return list(DEFAULT_CLEAR), "default grey"
+
+
 def compose_scene(run: Path, name: str, args: argparse.Namespace, warnings: list[str]) -> tuple[dict[str, Any], dict[str, Path]]:
     """Build scene.json from the run directory. Returns (scene, {relative target name: source path})."""
     exp_dir, grid_dir = run / "60_export", run / "70_grid"
@@ -265,6 +354,16 @@ def compose_scene(run: Path, name: str, args: argparse.Namespace, warnings: list
             warnings.append(f"{fname}: header says {count} splats, export.json says {exp_count}")
         splats[kind] = {"url": fname, "count": int(count), "sh_degree": int(sh), "bytes": src.stat().st_size}
         files[fname] = src
+    sd_e, hd_e = splats.get("sd"), splats.get("hd")
+    if sd_e and hd_e:
+        if same_bytes(files["splat_sd.spz"], files["splat_hd.spz"]):
+            # the export wrote the same file twice (the cleaned set is under the SD cap and SD already needs SH3): the HD button would
+            # download it again for nothing (review findings 19 and 47)
+            warnings.append("splat_hd.spz is byte-identical to splat_sd.spz: HD left out, so the viewer shows no HD button")
+            splats["hd"] = None
+            files.pop("splat_hd.spz", None)
+        elif (sd_e["bytes"], sd_e["count"], sd_e["sh_degree"]) == (hd_e["bytes"], hd_e["count"], hd_e["sh_degree"]):
+            warnings.append("splat_hd.spz has the same size, count and SH degree as splat_sd.spz but different bytes; kept")
     tf = parse_t_final(export.get("T_final"))
     splats["transform"] = {"position": round_list(tf["position"], 6), "quaternion": round_list(tf["quaternion"], 7), "scale": round(tf["scale"], 6)}
     render = export.get("render") or train.get("render")
@@ -273,6 +372,12 @@ def compose_scene(run: Path, name: str, args: argparse.Namespace, warnings: list
         warnings.append("export.json/train.json carry no 'render' block; assumed antialiased training (preBlur 0, blur 0.3)")
     splats["render"] = {"antialiased": bool(render.get("antialiased", True)), "preBlurAmount": float(render.get("preBlurAmount", 0.0)),
                         "blurAmount": float(render.get("blurAmount", 0.3)), "maxStdDev": float(render.get("maxStdDev", 2.828))}
+    held_files = sorted((exp_dir / "heldout").glob("*.jpg")) if (exp_dir / "heldout").is_dir() else []
+    clear, clear_src = scene_clear_colour(held_files, mpng)
+    splats["render"]["clear_color"] = clear
+    splats["render"]["clear_color_source"] = clear_src
+    if clear_src == "default grey":
+        warnings.append("clear colour: no held-out photo or minimap colour could be read (install Pillow for the photos); using the default grey")
 
     # grid
     cell = float(grid_json.get("cell", 0.05))
@@ -335,6 +440,14 @@ def compose_scene(run: Path, name: str, args: argparse.Namespace, warnings: list
     # scale, metrics
     sc = align.get("scale", {}) or {}
     scale = {"value": float(sc.get("value", 1.0)), "pct_68": float(sc.get("pct_68") or 0), "method": sc.get("method", ""), "cues": sc.get("cues", []), "checked_against": sc.get("checked_against")}
+    # a tape check (ns rescale --check / --use-measures) lands in 40_align/rescale.json, not in align.json; only then may the viewer say "checked"
+    resc = read_json(run / "40_align" / "rescale.json", {}) or {}
+    rval = resc.get("validation") or {}
+    if resc.get("checked_against") and rval.get("n_used"):
+        scale["checked_against"] = str(resc["checked_against"])
+        if isinstance(rval.get("auto_error_pct"), (int, float)):
+            scale["check_error_pct"] = round(float(rval["auto_error_pct"]), 2)
+        scale["check_n"] = int(rval["n_used"])
     variants = {v.get("name"): v for v in train.get("variants", [])}
     chosen = variants.get(train.get("chosen"), next(iter(variants.values()), {}))
     metrics = {"heldout_n": len(held), "psnr": chosen.get("psnr") or 0, "ssim": chosen.get("ssim") or 0, "lpips": chosen.get("lpips") or 0,
@@ -428,13 +541,26 @@ def load_places(path: Path, grid: tuple[int, int, bytes, list[float], float] | N
         yaw = p.get("yaw_deg", 0.0)
         if not isinstance(yaw, (int, float)) or not math.isfinite(yaw):
             raise ValueError(f"{where} ({name}): yaw_deg must be a number")
-        out.append({"id": pid, "name": name, "aliases": aliases, "kind": kind, "position": [round(v, 3) for v in pos], "yaw_deg": round(float(yaw), 2), "radius_m": round(float(radius), 3)})
+        entry = {"id": pid, "name": name, "aliases": aliases, "kind": kind, "position": [round(v, 3) for v in pos], "yaw_deg": round(float(yaw), 2), "radius_m": round(float(radius), 3)}
+        notes = str(p.get("notes", "") or "").strip()
+        if notes:
+            entry["notes"] = notes          # optional: who placed it and how
+        out.append(entry)
         if grid:
             gw, gh, gdata, origin, cell = grid
             d = nearest_walkable_m(gdata, gw, gh, origin, cell, pos[0], pos[2])
             if d > 3.0:
                 warnings.append(f"place {name!r}: the nearest walkable cell is {d:.1f} m away; check its position (x, z in metres, same frame as the grid)")
     return out
+
+
+def existing_video_url(out: Path) -> str:
+    """The video link already in out/index.html, so a rebuild without --video-url does not erase it."""
+    try:
+        m = re.search(r'<meta name="ns-video" content="([^"]*)"', (out / "index.html").read_text())
+        return m.group(1) if m else ""
+    except OSError:
+        return ""
 
 
 def copy_viewer(out: Path, video_url: str) -> None:
@@ -521,6 +647,12 @@ def validate_web(web: Path, strict: bool = False) -> dict[str, Any]:
                 warns.append(f"{name}: {kind} has {e['count']} splats, budget {mx_n}")
             if size > mx_b:
                 warns.append(f"{name}: {kind} is {size / 1e6:.1f} MB, budget {mx_b / 1e6:.0f} MB")
+        if sp.get("sd") and sp.get("hd") and (sdir / sp["sd"]["url"]).is_file() and (sdir / sp["hd"]["url"]).is_file():
+            if sp["sd"]["url"] == sp["hd"]["url"] or same_bytes(sdir / sp["sd"]["url"], sdir / sp["hd"]["url"]):
+                warns.append(f"{name}: hd is the same file as sd, so the HD button would download it again for nothing")
+        cc = (sp.get("render", {}) or {}).get("clear_color")
+        if cc is not None:
+            check(f"{name}: render.clear_color shape", isinstance(cc, list) and len(cc) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in cc), str(cc))
         g = sj.get("grid", {}) or {}
         gp = sdir / g.get("url", "grid.png")
         check(f"{name}: grid.png", gp.is_file(), "missing")
@@ -624,7 +756,7 @@ def main(argv: list[str] | None = None) -> int:
             if (out / "scenes").exists():
                 shutil.copytree(out / "scenes", tmp / "scenes")
     if not a.no_viewer:
-        copy_viewer(tmp, a.video_url)
+        copy_viewer(tmp, a.video_url or existing_video_url(out))
     sdir = tmp / "scenes" / name
     if sdir.exists():
         shutil.rmtree(sdir)

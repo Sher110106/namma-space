@@ -3,7 +3,7 @@
     NS_E2E_REMOTE=1 python3 test/e2e/test_remote.py
 Stages are stubs run with the host python (--no-docker), so the tests do not wait for container or GPU slots.
 Set NS_E2E_DOCKER=1 to add one run through nsdocker with the stubs in real containers (may queue behind other builders).
-Everything lives under runs/rh-e2e-* on tyrone and is deleted at the end.
+Everything lives under runs/$NS_E2E_PREFIX-* (default rh-e2e-*) on tyrone and is deleted at the end.
 """
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ HOST = os.environ.get("NS_HOST", "sher@10.1.18.190")
 RROOT = os.environ.get("NS_REMOTE_ROOT", "/home/sher/namma-space")
 FRAMES = ROOT / "test" / "data" / "honka_subset" / "frames"
 STUB_FLAG = "--no-docker --stub-dir test/e2e/stubs"
+P = os.environ.get("NS_E2E_PREFIX", "rh-e2e")    # run-name prefix on the host (fixers use fix-e2e)
 
 
 def ssh(cmd: str, timeout=60):
@@ -69,7 +70,7 @@ class Remote(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        ssh(f"rm -rf {RROOT}/runs/rh-e2e-*", 60)
+        ssh(f"rm -rf {RROOT}/runs/{P}-* {RROOT}/inbox/{P}_tiny_*.mp4", 60)
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def cfg(self, obj) -> str:
@@ -94,7 +95,7 @@ class Remote(unittest.TestCase):
 
     # ---- 0.2
     def test_0_2_ssh_drop_keeps_remote_job_running_and_pull_recovers(self):
-        name = "rh-e2e-drop"
+        name = f"{P}-drop"
         p = subprocess.Popen([sys.executable, NS, "run", "--frames", str(self.frames), "--name", name, "--no-check",
                               "--stub-cfg", self.cfg({"train": {"sleep": 12}}), "--runner-flag", STUB_FLAG],
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=self.env,
@@ -118,7 +119,7 @@ class Remote(unittest.TestCase):
 
     # ---- 0.1 through ns
     def test_0_1_kill_runner_then_ns_run_from_train(self):
-        name = "rh-e2e-resume"
+        name = f"{P}-resume"
         r = self.ns("run", "--frames", str(self.frames), "--name", name, "--no-check", "--detach",
                     "--stub-cfg", self.cfg({"train": {"sleep": 120}}), "--runner-flag", STUB_FLAG)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -144,37 +145,62 @@ class Remote(unittest.TestCase):
     # ---- 0.4
     def test_0_4_two_runs_at_once_do_not_collide(self):
         cfg = self.cfg({"train": {"sleep": 4}})
-        for n in ("rh-e2e-a", "rh-e2e-b"):
+        for n in (f"{P}-a", f"{P}-b"):
             r = self.ns("run", "--frames", str(self.frames), "--name", n, "--no-check", "--detach", "--stub-cfg", cfg,
                         "--runner-flag", STUB_FLAG)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        for n in ("rh-e2e-a", "rh-e2e-b"):
+        for n in (f"{P}-a", f"{P}-b"):
             st = wait_remote(n, lambda s: s.get("state") in ("done", "partial", "review", "failed", "stopped"), 120)
             self.assertIsNotNone(st, n)
             self.assertEqual(st.get("exit"), 0, n)
-        a = remote_json("rh-e2e-a", "10_frames/frames.json")
-        b = remote_json("rh-e2e-b", "10_frames/frames.json")
+        a = remote_json(f"{P}-a", "10_frames/frames.json")
+        b = remote_json(f"{P}-b", "10_frames/frames.json")
         self.assertEqual((a["n_kept"], b["n_kept"]), (6, 6))
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg missing")
     def test_take_b_runs_as_a_second_run_in_parallel(self):
-        v = self.tmp / "tiny.mp4"
+        v = self.tmp / f"{P}_tiny_{os.getpid()}.mp4"
         subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10", "-t", "1",
                         "-pix_fmt", "yuv420p", str(v)], check=True)
-        r = self.ns("run", str(v), "--name", "rh-e2e-tb", "--take-b", str(v), "--no-check", "--no-pull", "--height", "170",
+        r = self.ns("run", str(v), "--name", f"{P}-tb", "--take-b", str(v), "--no-check", "--no-pull", "--height", "170",
                     "--measure", "length=4.12", "--stub-cfg", self.cfg({}), "--runner-flag", STUB_FLAG)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        for n in ("rh-e2e-tb", "rh-e2e-tb-b"):
+        for n in (f"{P}-tb", f"{P}-tb-b"):
             self.assertEqual(remote_json(n, "status.json")["exit"], 0, n)
             meta = remote_json(n, "input/meta.json")
             self.assertEqual(meta["height_cm"], 170.0)
             self.assertEqual(meta["measures"][0], {"what": "length", "metres": 4.12, "method": "tape"})
-        self.assertEqual(remote_json("rh-e2e-tb-b", "input/meta.json")["takes"][0]["id"], "B")
-        self.assertIn("tiny.mp4", ssh(f"ls {RROOT}/runs/rh-e2e-tb-b/input").stdout)
+        self.assertEqual(remote_json(f"{P}-tb-b", "input/meta.json")["takes"][0]["id"], "B")
+        self.assertIn(v.name, ssh(f"ls {RROOT}/runs/{P}-tb-b/input").stdout)
+        self.assertTrue(v.exists())        # no --move: the Mac copy stays
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg missing")
+    def test_mac_video_goes_to_the_inbox_move_deletes_it_and_package_on_host_places_it(self):
+        # review #6/#23 and #7/#14/#26
+        v = self.tmp / f"{P}_tiny_mv{os.getpid()}.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10", "-t", "1",
+                        "-pix_fmt", "yuv420p", str(v)], check=True)
+        size = v.stat().st_size
+        name = f"{P}-move"
+        r = self.ns("run", str(v), "--name", name, "--no-check", "--no-pull", "--move", "--stub-cfg", self.cfg({}),
+                    "--runner-flag", STUB_FLAG)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse(v.exists(), "--move should delete the Mac copy")
+        self.assertIn("deleted the Mac copy", r.stdout)
+        self.assertEqual(ssh(f"stat -L -c %s {RROOT}/inbox/{v.name}").stdout.strip(), str(size))
+        self.assertTrue(ssh(f"test -L {RROOT}/runs/{name}/input/{v.name}").returncode == 0)
+        meta = remote_json(name, "input/meta.json")
+        self.assertEqual(meta["files"][0]["on_host"], f"{RROOT}/inbox/{v.name}")
+        r = self.ns("package", name, "--with-inputs", "--on-host")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(ssh(f"stat -c %s {RROOT}/runs/{name}/package/04_Inputs_Used/{v.name}").stdout.strip(), str(size))
+        man = ssh(f"cat {RROOT}/runs/{name}/package/MANIFEST.txt").stdout
+        self.assertIn(f"04_Inputs_Used/{v.name}", man)
+        self.assertIn("04_Inputs_Used/sketch (no --sketch", man)
 
     # ---- a runner killed with -9 must not leave `ns run` polling forever
     def test_dead_runner_is_detected(self):
-        name = "rh-e2e-dead"
+        name = f"{P}-dead"
         p = subprocess.Popen([sys.executable, NS, "run", "--frames", str(self.frames), "--name", name, "--no-check",
                               "--no-pull", "--stub-cfg", self.cfg({"train": {"sleep": 120}}), "--runner-flag", STUB_FLAG],
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=self.env)
@@ -189,7 +215,7 @@ class Remote(unittest.TestCase):
 
     # ---- 0.8
     def test_0_8_rescale_changes_t_final_and_grid_without_retraining(self):
-        name = "rh-e2e-rescale"
+        name = f"{P}-rescale"
         r = self.ns("run", "--frames", str(self.frames), "--name", name, "--no-check", "--stub-cfg", self.cfg({}),
                     "--runner-flag", STUB_FLAG)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -213,7 +239,7 @@ class Remote(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get("NS_E2E_DOCKER") == "1", "set NS_E2E_DOCKER=1 for the real-container run")
     def test_stub_stages_in_real_containers(self):
-        name = "rh-e2e-docker"
+        name = f"{P}-docker"
         r = self.ns("run", "--frames", str(self.frames), "--name", name, "--no-check", "--quick",
                     "--runner-flag", "--stub-dir test/e2e/stubs", timeout=1500)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

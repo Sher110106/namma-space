@@ -120,6 +120,53 @@ class NsCli(unittest.TestCase):
         self.assertIn("01_Technical_Abstract.pdf", manifest)
         self.assertIn("length: 4.12 m", (pkg / "04_Inputs_Used" / "measurements.txt").read_text())
 
+    def test_package_with_inputs_copies_mac_video_and_sketch_and_lists_the_rest(self):
+        # review #7/#14/#26: the take on the Mac is copied with its size and sha256; a take only on tyrone and a
+        # missing sketch are listed under missing with size and place
+        run = self.fake_run()
+        video = self.tmp / "IMG_0001.MOV"
+        video.write_bytes(b"v" * 3000)
+        sketch = self.tmp / "sketch.jpg"
+        sketch.write_bytes(b"s" * 500)
+        (run / "input" / "meta.json").write_text(json.dumps({"height_cm": 175, "measures": [], "files": [
+            {"name": "IMG_0001.MOV", "bytes": 3000, "on_host": "/x/inbox/IMG_0001.MOV", "mac_path": str(video)}]}))
+        brun = self.tmp / "demo-b"
+        (brun / "input").mkdir(parents=True)
+        (brun / "input" / "meta.json").write_text(json.dumps({"height_cm": 175, "measures": [], "files": [
+            {"name": "IMG_0002.MOV", "bytes": 2_500_000_000, "on_host": "/x/inbox/IMG_0002.MOV"}]}))
+        r = ns("package", "demo", "--with-inputs", "--sketch", str(sketch), env=self.env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        inp = run / "package" / "04_Inputs_Used"
+        self.assertEqual((inp / "IMG_0001.MOV").stat().st_size, 3000)
+        self.assertTrue((inp / "sketch_sketch.jpg").is_file())
+        self.assertTrue((inp / "take_b_meta.json").is_file())
+        listing = (inp / "INPUTS.txt").read_text()
+        self.assertIn("IMG_0001.MOV\t0.0 MB\tcopied", listing)
+        manifest = (run / "package" / "MANIFEST.txt").read_text()
+        self.assertIn("04_Inputs_Used/IMG_0001.MOV", manifest)
+        self.assertIn("04_Inputs_Used/take_b_IMG_0002.MOV (2500.0 MB; on tyrone at /x/inbox/IMG_0002.MOV)", manifest)
+        self.assertIn("--on-host", manifest)
+        self.assertNotIn("04_Inputs_Used/sketch (no --sketch", manifest)
+
+    def test_package_without_inputs_names_each_take_and_the_sketch(self):
+        run = self.fake_run()
+        (run / "input" / "meta.json").write_text(json.dumps({"height_cm": 170, "measures": [], "files": [
+            {"name": "IMG_0001.MOV", "bytes": 900_000_000, "on_host": "/x/inbox/IMG_0001.MOV"}]}))
+        r = ns("package", "demo", env=self.env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        manifest = (run / "package" / "MANIFEST.txt").read_text()
+        self.assertIn("04_Inputs_Used/IMG_0001.MOV (900.0 MB; on tyrone at /x/inbox/IMG_0001.MOV): add --with-inputs",
+                      manifest)
+        self.assertIn("04_Inputs_Used/sketch (no --sketch PHOTO given", manifest)
+
+    def test_mac_steps_refuse_when_the_disk_is_nearly_full(self):
+        # review #6/#23: bundle, verify and report stop with exit 20 and say what to do, before ENOSPC can hit
+        self.fake_run()
+        for step in ("bundle", "verify", "report"):
+            r = ns(step, "demo", env=dict(self.env, NS_MAC_MIN_FREE_GB="100000"))
+            self.assertEqual(r.returncode, 20, step + r.stdout + r.stderr)
+            self.assertIn(f"{step} refused", r.stdout + r.stderr)
+
     def test_publish_is_a_dry_run_by_default_and_flags_big_files(self):
         self.fake_run(big=True)
         r = ns("publish", "demo", env=self.env)

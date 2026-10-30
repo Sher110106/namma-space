@@ -37,6 +37,10 @@ kbd { display: inline-block; min-width: 1.5em; padding: 1px 6px; margin: 0 2px; 
 .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s linear; }
 #loader-sub { margin-top: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* before the first byte of the scene arrives the bar slides, so a slow link does not look like a frozen page */
+#loader.wait .bar i { width: 30%; animation: ns-wait 1.2s ease-in-out infinite; transition: none; }
+@keyframes ns-wait { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { #loader.wait .bar i { animation: none; width: 100%; opacity: .35; } }
 
 /* cards */
 .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,8,12,.55); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); z-index: 50; padding: 16px; overflow: auto; }

@@ -74,3 +74,42 @@ matcher then asked for 6.9 GB, aborted (exit -6) twice, and held 33.5 GB of GPU 
 other jobs out of the GPU (nsdocker needs 12 GB free). `Cfg.sift_max_image_size = 1024` now caps B's extraction size
 (COLMAP scales keypoints back to full resolution). At 1280 px b7 still reached 19,358 keypoints and failed on 6.0 GB,
 hence 1024, the regime in which honka's B worked and won. Honka is unaffected (994 px).
+
+## Review fix #9 (30 Oct): camera-path filter on capture time
+`sanity.py` now measures each step as a speed against capture time (`frames.json kept[].t`), so windows that ingest
+dropped no longer read as jumps; frames mode (no time) falls back to the frame index. It drops (1) cameras far from
+the median centre, (2a) single cameras off the line between their two neighbours in time, (2b) stretches the main
+path skips, when the cameras on either side join without a jump and the stretch sits well off that line (any length,
+up to half the cameras), and (3) stubs of at most 3 cameras at either end. sfm.json records `sanity_time_axis`.
+Tests: `test/unit/sfm/test_sanity.py::TestReviewFix9` (synthetic loop with ingest gaps, a 16-camera wrong stretch,
+single wrong cameras, a real sidestep, frames mode, end stubs).
+
+Checked against MuSHRoom ARKit poses on the saved raw models (before any filter) with
+`python3 -m pipeline.sfm.sanity_gt` (trimmed similarity fit, wrong = more than 0.30 m from the true place; output
+`/home/sher/namma-space/runs/fix-sanity/gt_score.json`):
+
+| Run, variant (model) | Cameras | Wrong | Old: dropped (of them correct), wrong kept | New: dropped (correct), wrong kept |
+|---|---|---|---|---|
+| rh-phone C (sparse/0), chosen before | 300 | 24 | 31 (23), 16 | 24 (0), 0 |
+| rh-phone B (sparse/1) | 299 | 7 | 35 (29), 1 | 5 (0), 2 |
+| rh-phone D (sparse/0) | 280 | 10 | 14 (11), 7 | 4 (0), 6 |
+| rh-phone A (sparse/0) | 284 | 275 | 114 (7), 168 | 94 (7), 188 |
+| rh-honka B (sparse/0), chosen | 334 | 15 | 18 (4), 1 | 15 (0), 0 |
+| rh-honka A (sparse/0) | 318 | 63 | 31 (25), 57 | 54 (0), 9 |
+| rh-honka D (sparse/0) | 323 | 57 | 1 (0), 56 | 48 (0), 9 |
+| rh-vrroom A, B, D | 422, 422, 420 | 0 | 0, 0 | 0, 0 |
+
+rh-phone A is a broken model (275 of 284 cameras off by more than 0.30 m even after the best fit); no path rule can
+save it, and the variant race rejects it on registration share. The ingest drop rule is unchanged, as the reviewer
+advised.
+
+The fix-honka rebuild (30 Oct 16:19, new filter in the pipeline, frozen code `repo-fixrun`) ran COLMAP again, so its
+models differ from rh-honka's. Scored the same way (`runs/fix-sanity/gt_score_fix-honka.json`):
+
+| fix-honka variant | Cameras | Wrong | Old filter on this model: dropped (correct), wrong kept | New (used): dropped (correct), wrong kept |
+|---|---|---|---|---|
+| B (chosen) | 334 | 20 | 20 (3), 3 | 18 (0), 2 |
+| A | 318 | 65 | 43 (33), 55 | 58 (0), 7 |
+| D | 317 | 28 | 3 (0), 25 | 21 (0), 7 |
+
+B was chosen again at 94.6% in one model (317 of 335), so the run is still partial (exit 11), as rh-honka was.

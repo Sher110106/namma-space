@@ -1,6 +1,6 @@
 // Places: reading scene.json "places", fuzzy search, and the JSON the place editor writes. Pure logic (Node can import it).
 //
-// place = {id, name, aliases[], kind: "room" | "item" | "zone", position: [x, y, z], yaw_deg, radius_m}   (CONTRACTS 2.12)
+// place = {id, name, aliases[], kind: "room" | "item" | "zone", position: [x, y, z], yaw_deg, radius_m, notes?}   (CONTRACTS 2.12; notes is an optional extra)
 
 export const KINDS = ["room", "item", "zone"];
 export const DEFAULT_RADIUS = { room: 1.5, zone: 1.0, item: 0.4 };
@@ -21,7 +21,9 @@ export function normalisePlace(p, i = 0) {
   const position = pos.length >= 3 ? pos.slice(0, 3) : [pos[0], kind === "item" ? 1.0 : 0.0, pos[1]];
   const aliases = (Array.isArray(p.aliases) ? p.aliases : typeof p.aliases === "string" ? p.aliases.split(",") : []).map((a) => String(a).trim()).filter(Boolean);
   const radius = Number.isFinite(+p.radius_m) && +p.radius_m > 0 ? +p.radius_m : DEFAULT_RADIUS[kind];
-  return { id: String(p.id || slug(name) || `p${i + 1}`), name, aliases, kind, position, yaw_deg: Number.isFinite(+p.yaw_deg) ? +p.yaw_deg : 0, radius_m: radius };
+  const out = { id: String(p.id || slug(name) || `p${i + 1}`), name, aliases, kind, position, yaw_deg: Number.isFinite(+p.yaw_deg) ? +p.yaw_deg : 0, radius_m: radius };
+  if (typeof p.notes === "string" && p.notes.trim()) out.notes = p.notes.trim();       // optional: who placed it and how
+  return out;
 }
 /** Unique ids: a repeated id gets -2, -3, ... */
 export function uniqueIds(list) {
@@ -33,7 +35,7 @@ export function readPlaces(raw) { return uniqueIds((Array.isArray(raw) ? raw : [
 /** JSON for scene.json "places": 3 decimals, one place per block. */
 export function placesToJson(list) {
   const r = (v) => Math.round(v * 1000) / 1000;
-  return JSON.stringify(list.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases || [], kind: p.kind, position: p.position.map(r), yaw_deg: r(p.yaw_deg || 0), radius_m: r(p.radius_m) })), null, 2);
+  return JSON.stringify(list.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases || [], kind: p.kind, position: p.position.map(r), yaw_deg: r(p.yaw_deg || 0), radius_m: r(p.radius_m), ...(p.notes ? { notes: p.notes } : {}) })), null, 2);
 }
 
 /** World yaw in degrees that looks from (fx, fz) toward (tx, tz): yaw 0 looks along -Z, positive turns left. */

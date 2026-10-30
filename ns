@@ -52,7 +52,7 @@ RUN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,40}$")
 SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3"]
 STAGES = ["ingest", "sfm", "align", "train", "geometry", "export", "grid"]
-SYNC_EXCLUDES = [".git", "node_modules", "runs", "inbox", "__pycache__", "*.pyc", ".DS_Store", "viewer/dist/scenes"]
+SYNC_EXCLUDES = [".git", "node_modules", ".venv", "runs", "inbox", "__pycache__", "*.pyc", ".DS_Store", "viewer/dist/scenes"]
 PORT = 5178
 END_STATES = ("done", "partial", "review", "failed", "stopped")  # final values of status.json "state"
 
@@ -215,10 +215,55 @@ def sync_code(subdir: str = "", quiet: bool = False) -> int:
     args = []
     for e in SYNC_EXCLUDES:
         args += ["--exclude", e]
-    rc = rsync([*args, str(src) + "/", dst], quiet=quiet)
+    rc = rsync_tree([*args, str(src) + "/", dst], quiet=quiet)
     if rc != 0:
         say(f"ns: rsync failed (exit {rc})")
     return rc
+
+
+def rsync_tree(args: list, quiet: bool = False, tries: int = 3) -> int:
+    """rsync of the working tree. Exit 23/24 (a file changed or vanished while it was read, e.g. another tool
+    writing in docs/ or viewer/) is retried; the next pass sends what changed."""
+    rc = 0
+    for _ in range(tries):
+        rc = rsync(args, quiet=quiet)
+        if rc not in (23, 24):
+            return rc
+        time.sleep(2)
+    return rc
+
+
+REPO_DIR_RE = re.compile(r"^repo[a-z0-9_.-]{0,40}$")
+
+
+def freeze_code(repo_dir: str) -> int:
+    """Copy the current tree into RROOT/<repo_dir> for one run (review fix 3, 30 Oct). An existing copy is moved
+    aside to <repo_dir>.old-<time> first (nothing is deleted), so the copy holds exactly this tree."""
+    if not REPO_DIR_RE.match(repo_dir) or repo_dir == "repo":
+        die(f"--repo-dir {repo_dir!r}: use a name like repo-room (letters, digits, - _ .), not 'repo'")
+    dst = f"{RROOT}/{repo_dir}"
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    res = ssh(f"if [ -e {dst} ]; then mv {dst} {dst}.old-{ts} && echo MOVED; fi; mkdir -p {dst}", timeout=30)
+    if res.returncode != 0:
+        say(f"ns: cannot prepare {dst}: {res.stderr.strip()[:150]}")
+        return 20
+    if "MOVED" in res.stdout:
+        say(f"ns: the earlier copy is now {dst}.old-{ts} (delete it by hand once no run uses it)")
+    args = []
+    for e in SYNC_EXCLUDES:
+        args += ["--exclude", e]
+    rc = rsync_tree([*args, str(REPO) + "/", f"{HOST}:{dst}/"], quiet=True)
+    if rc != 0:
+        say(f"ns: rsync to {dst} failed (exit {rc})")
+        return 20
+    stamp_txt = json.dumps({"git": git_sha(), "frozen": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+                            "from": str(REPO)})
+    r2 = subprocess.run(["ssh", *SSH_OPTS, HOST, f"cat > {dst}/FROZEN.json"], input=stamp_txt, text=True,
+                        capture_output=True, timeout=30)
+    if r2.returncode != 0:
+        return 20
+    say(f"[{stamp()}] code frozen in {dst} ({git_sha()}); the runner and its containers use it (/w/{repo_dir})")
+    return 0
 
 
 def cmd_sync(a) -> int:
@@ -322,8 +367,12 @@ echo "RUNS $(du -sm runs 2>/dev/null | cut -f1)"
             ver = subprocess.run([tool, flag], capture_output=True, text=True).stdout.splitlines()[:1]
             ver = ver[0][:60] if ver else ""
         r.line("PASS", tool, ver or p)
-    chrome = glob.glob(os.path.expanduser("~/Library/Caches/ms-playwright/chromium_headless_shell*/*/chrome-headless-shell"))
-    r.line("PASS" if chrome else "WARN", "headless chrome", "found" if chrome else "playwright chromium_headless_shell missing")
+    env_chrome = os.environ.get("NS_CHROME")
+    chrome = ([env_chrome] if env_chrome and os.path.isfile(env_chrome) else []) + glob.glob(os.path.expanduser(
+        "~/Library/Caches/ms-playwright/chromium_headless_shell*/*/chrome-headless-shell")) + glob.glob(os.path.expanduser(
+        "~/.cache/ms-playwright/chromium_headless_shell*/*/chrome-headless-shell"))
+    r.line("PASS" if chrome else "WARN", "headless chrome", chrome[0] if chrome else
+           "missing: npx playwright install chromium-headless-shell, or set NS_CHROME to a Chrome binary")
     mfree = free_gb(REPO)
     r.line("PASS" if mfree >= 10 else ("WARN" if mfree >= 3 else "FAIL"), "disk free (Mac)",
            f"{mfree:.1f} GB at {REPO}" + ("" if mfree >= 10 else "  (pulls and zips need room; free some space)"))
@@ -481,7 +530,7 @@ def read_status(name: str) -> dict | None:
 
 
 def build_runner_flags(a) -> list:
-    flags = []
+    flags = ["--ns-root", RROOT]   # the runner's paths follow NS_REMOTE_ROOT (review #13)
     if a.from_stage:
         flags += ["--from", a.from_stage]
     if a.to:
@@ -499,13 +548,29 @@ def build_runner_flags(a) -> list:
     return flags
 
 
-def launch_remote(name: str, flags: list) -> int | None:
-    """Start ns_remote.py under nohup on tyrone. Returns the pid, 0 when one is already running, None on ssh failure."""
+def frozen_repo_of(name: str) -> str:
+    """The frozen code folder a run was built from (run.json "repo", set by ns run --repo-dir), else 'repo'."""
+    res = ssh(f"cat {remote_run(name)}/run.json", timeout=30)
+    try:
+        repo = json.loads(res.stdout).get("repo") or ""
+    except ValueError:
+        return "repo"
+    base = repo.rsplit("/", 1)[-1]
+    if repo == f"{RROOT}/{base}" and base != "repo" and REPO_DIR_RE.match(base) and \
+            ssh(f"test -f {RROOT}/{base}/pipeline/remote/ns_remote.py", timeout=20).returncode == 0:
+        return base
+    return "repo"
+
+
+def launch_remote(name: str, flags: list, repo_dir: str = "repo") -> int | None:
+    """Start ns_remote.py under nohup on tyrone from RROOT/<repo_dir> (default repo/; a frozen copy made by
+    --repo-dir keeps a running build safe from later code syncs). Returns the pid, 0 when one is already
+    running, None on ssh failure."""
     rd = remote_run(name)
     cmd = f"""
 mkdir -p {rd}/logs
 if ! flock -n {rd}/.runner.lock true 2>/dev/null; then echo ATTACH; exit 0; fi
-cd {RROOT}/repo
+cd {RROOT}/{repo_dir}
 nohup python3 pipeline/remote/ns_remote.py {shlex.quote(name)} --git {shlex.quote(git_sha())} {' '.join(shlex.quote(f) for f in flags)} \
   >> {rd}/logs/runner.log 2>&1 < /dev/null &
 echo PID $!
@@ -601,6 +666,45 @@ def poll_runs(names: dict, light_pull: bool = True, max_ssh_fail_s: float = 1800
     return results
 
 
+def remote_sha256(path: str) -> str | None:
+    res = ssh(f"sha256sum {shlex.quote(path)}", timeout=900)
+    return res.stdout.split()[0] if res.returncode == 0 and res.stdout.strip() else None
+
+
+def upload_to_inbox(src: Path, run_name: str, move: bool) -> int:
+    """Copy a Mac video to tyrone's inbox/ (kept there, linked into runs/<name>/input). With move, check the
+    sha256 on both sides and then delete the Mac copy."""
+    dst = f"{RROOT}/inbox/{src.name}"
+    size = src.stat().st_size
+    have = remote_probe(dst, "video")
+    if have and have["bytes"] == size:
+        say(f"[{stamp()}] {src.name} is already in tyrone's inbox ({size / 1e9:.2f} GB); not uploading again")
+    else:
+        if have and have["bytes"] > size:
+            die(f"tyrone already has a different {dst} ({have['bytes']} bytes, ours {size}); rename the file")
+        if have:   # a shorter file is an upload that stopped half-way (rsync --partial); rsync finishes it
+            say(f"[{stamp()}] tyrone has {have['bytes'] / 1e9:.2f} of {size / 1e9:.2f} GB of {src.name}; finishing the upload")
+        say(f"[{stamp()}] upload {src.name} ({size / 1e9:.2f} GB) -> tyrone:{dst}")
+        if ssh(f"mkdir -p {RROOT}/inbox", timeout=30).returncode != 0:
+            return 20
+        rc = rsync(["--partial", str(src), f"{HOST}:{RROOT}/inbox/"])
+        if rc != 0:
+            say(f"ns: upload failed (rsync exit {rc}); the Mac copy is untouched")
+            return 20
+    if move:
+        say(f"[{stamp()}] --move: checking the copy on tyrone before deleting {src}")
+        local = sha256_of(src)
+        remote = remote_sha256(dst)
+        if remote != local:
+            say(f"ns: checksum mismatch ({local[:12]} here, {(remote or 'none')[:12]} on tyrone); the Mac copy is kept")
+            return 20
+        src.unlink()
+        say(f"[{stamp()}] deleted the Mac copy; the video is at tyrone:{dst} (sha256 {local[:16]})")
+    else:
+        say(f"ns: the Mac copy stays at {src}; add --move next time to free {size / 1e9:.2f} GB once it is on tyrone")
+    return 0
+
+
 def cmd_run(a) -> int:
     name = valid_name(a.name)
     names = [name] + ([valid_name(name + "-b")] if a.take_b else [])
@@ -660,9 +764,11 @@ def cmd_run(a) -> int:
                 files = ([{"name": src_name, "bytes": rinfo["bytes"], "on_host": str(src)}] if kind == "video" else
                          [{"name": "frames/", "files": rinfo["files"], "bytes": rinfo["bytes"], "on_host": str(src)}])
             else:
-                files = ([{"name": src.name, "bytes": src.stat().st_size}] if kind == "video" else
+                files = ([{"name": src.name, "bytes": src.stat().st_size, "on_host": f"{RROOT}/inbox/{src.name}",
+                           "mac_path": str(src.resolve())}] if kind == "video" else
                          [{"name": "frames/", "files": sum(1 for x in src.iterdir() if x.is_file() and x.name != ".DS_Store"),
-                           "bytes": sum(x.stat().st_size for x in src.iterdir() if x.is_file())}])
+                           "bytes": sum(x.stat().st_size for x in src.iterdir() if x.is_file()),
+                           "on_host": f"{remote_run(n)}/input/frames", "mac_path": str(src.resolve())}])
             meta = {"name": n, "height_cm": a.height, "measures": parse_measures(a.measure), "notes": a.note or "",
                     "provenance": {k: v for k, v in (("kind", a.kind), ("license", a.license), ("attribution", a.attribution),
                                                      ("source", a.source), ("title", a.title)) if v},
@@ -684,7 +790,15 @@ def cmd_run(a) -> int:
                 else:
                     say("ns: pipeline/ingest/check_mac.py not present; skipping the preflight check")
 
-    if not a.no_sync:
+    repo_dir = a.repo_dir or "repo"
+    if a.repo_dir and a.no_sync:
+        if "yes" not in ssh(f"test -f {RROOT}/{repo_dir}/pipeline/remote/ns_remote.py && echo yes", timeout=20).stdout:
+            die(f"--repo-dir {repo_dir} --no-sync: {RROOT}/{repo_dir} holds no code; drop --no-sync to freeze it now")
+        say(f"[{stamp()}] using the frozen code in {RROOT}/{repo_dir}")
+    elif a.repo_dir:
+        if freeze_code(repo_dir) != 0:
+            return 20
+    elif not a.no_sync:
         say(f"[{stamp()}] sync code to tyrone")
         if sync_code(quiet=True) != 0:
             say("ns: code sync failed; is ssh up? (./ns doctor)")
@@ -698,12 +812,14 @@ def cmd_run(a) -> int:
             return 20
         if rinfo is not None:  # already on tyrone: link it into the run, nothing crosses the network
             rc = place_remote_input(str(src), rd, kind)
+        elif kind == "video":
+            # review #6/#23: the video lives in tyrone's inbox, linked into the run; the Mac copy can go (--move)
+            rc = upload_to_inbox(src, n, a.move)
+            if rc == 0:
+                rc = place_remote_input(f"{RROOT}/inbox/{src.name}", rd, kind)
         else:
             say(f"[{stamp()}] upload {src.name} -> runs/{n}/input/")
-            if kind == "video":
-                rc = rsync(["--partial", str(src), f"{HOST}:{rd}/input/"])
-            else:
-                rc = rsync(["--exclude", ".DS_Store", str(src) + "/", f"{HOST}:{rd}/input/frames/"])
+            rc = rsync(["--exclude", ".DS_Store", str(src) + "/", f"{HOST}:{rd}/input/frames/"])
         if rc == 0:
             rc = rsync([str(local_run(n) / "input" / "meta.json"), f"{HOST}:{rd}/input/meta.json"])
         if rc != 0:
@@ -732,11 +848,11 @@ def cmd_run(a) -> int:
         if "yes" not in (ex.stdout or "") and resume_only:
             die(f"runs/{n} does not exist on tyrone; give a video or --frames")
         if a.dry_run:
-            res = ssh(f"cd {RROOT}/repo && python3 pipeline/remote/ns_remote.py {shlex.quote(n)} {' '.join(shlex.quote(f) for f in flags)}",
+            res = ssh(f"cd {RROOT}/{repo_dir} && python3 pipeline/remote/ns_remote.py {shlex.quote(n)} {' '.join(shlex.quote(f) for f in flags)}",
                       timeout=60)
             say(res.stdout.strip() or res.stderr.strip())
             continue
-        pid = launch_remote(n, flags)
+        pid = launch_remote(n, flags, repo_dir)
         if pid is None:
             say("ns: could not start the runner on tyrone")
             return 20
@@ -835,7 +951,22 @@ def post_pull(name: str) -> int:
     return worst
 
 
+MAC_MIN_FREE_GB = float(os.environ.get("NS_MAC_MIN_FREE_GB", "1.5"))
+
+
+def mac_space_ok(step: str, name: str) -> bool:
+    """Refuse a Mac step when the disk is nearly full (review #6/#23: verify and report once died of ENOSPC)."""
+    free = free_gb(local_run(name))
+    if free >= MAC_MIN_FREE_GB:
+        return True
+    say(f"ns: {step} refused: the Mac has {free:.2f} GB free, below {MAC_MIN_FREE_GB:g} GB. Nothing on tyrone is lost. "
+        f"Free space (e.g. ~/Downloads; move videos to tyrone with ./ns run --move), then run ./ns {step} {name}.")
+    return False
+
+
 def cmd_bundle_run(name: str) -> int:
+    if not mac_space_ok("bundle", name):
+        return 20
     tool = REPO / "viewer" / "tools" / "bundle.py"
     if not tool.exists():
         say("bundle: viewer/tools/bundle.py not present yet (W5); skipped")
@@ -847,11 +978,16 @@ def cmd_bundle_run(name: str) -> int:
                       ("source", "--source"), ("title", "--title"), ("captured", "--captured")):
         if prov.get(key):
             cmd += [flag, str(prov[key])]
+    places = REPO / "viewer" / "places" / f"{name}.json"
+    if not (run / "places.json").exists() and places.exists():   # runs/<name>/places.json wins (bundle.py reads it)
+        cmd += ["--places", str(places)]
     say(f"[{stamp()}] bundle: {' '.join(shlex.quote(c) for c in cmd[1:])}")
     return run_limited(cmd, MAC_STEP_LIMIT_S["bundle"], "bundle")
 
 
 def cmd_verify_run(name: str) -> int:
+    if not mac_space_ok("verify", name):
+        return 20
     tool = REPO / "viewer" / "test" / "run.mjs"
     if not tool.exists():
         say("verify: viewer/test/run.mjs not present; skipped")
@@ -875,6 +1011,8 @@ def cmd_verify_run(name: str) -> int:
 
 
 def cmd_report_run(name: str) -> int:
+    if not mac_space_ok("report", name):
+        return 20
     run = local_run(name)
     say(f"[{stamp()}] report: runs/{name}/report.json, report.html")
     rc = subprocess.run([sys.executable, "-m", "pipeline.report", "--run", str(run)], cwd=str(REPO)).returncode
@@ -1014,10 +1152,13 @@ def cmd_rescale(a) -> int:
     t0 = time.time()
     if not a.no_sync and sync_code(quiet=True) != 0:
         return 20
-    flags = ["--rescale"] + sum([["--opt", f"rescale:{o}"] for o in opts], [])
+    flags = ["--ns-root", RROOT, "--rescale"] + sum([["--opt", f"rescale:{o}"] for o in opts], [])
     for rf in a.runner_flag or []:
         flags += shlex.split(rf)
-    pid = launch_remote(name, flags)
+    repo_dir = frozen_repo_of(name)
+    if repo_dir != "repo":
+        say(f"[{stamp()}] {name} was built from the frozen code in {RROOT}/{repo_dir}; the rescale uses it too")
+    pid = launch_remote(name, flags, repo_dir)
     if pid is None:
         say("ns: could not start the runner on tyrone")
         return 20
@@ -1093,22 +1234,7 @@ def cmd_package(a) -> int:
 
     inp = out / "04_Inputs_Used"
     inp.mkdir()
-    meta = run / "input" / "meta.json"
-    if meta.exists():
-        shutil.copy2(meta, inp / "meta.json")
-        m = json.loads(meta.read_text())
-        lines = [f"height_cm: {m.get('height_cm')}"] + [f"{x['what']}: {x['metres']} m ({x.get('method', '')})"
-                                                         for x in m.get("measures", [])]
-        (inp / "measurements.txt").write_text("\n".join(lines) + "\n")
-        made.append(inp / "measurements.txt")
-    else:
-        missing.append("04_Inputs_Used/measurements.txt")
-    for f in sorted((run / "input").glob("*")) if (run / "input").is_dir() else []:
-        if f.is_file() and f.suffix.lower() in (".mp4", ".mov", ".m4v", ".jpg", ".jpeg", ".png") and a.with_inputs:
-            shutil.copy2(f, inp / f.name)
-            made.append(inp / f.name)
-    if not a.with_inputs:
-        missing.append("04_Inputs_Used/<original videos> (add --with-inputs to copy them)")
+    remote_items = collect_inputs(name, a, inp, made, missing)
 
     code = out / "03_Code_Repository"
     code.mkdir()
@@ -1132,8 +1258,11 @@ def cmd_package(a) -> int:
         else:
             missing.append(f"{want} (not found; pass --extra DIR holding it)")
 
-    lines = ["Namma Space Round 1 package", f"run: {name}", f"git: {git_sha()}",
-             f"built: {dt.datetime.now().astimezone().isoformat(timespec='seconds')}", "", "files:"]
+    header = ["Namma Space Round 1 package", f"run: {name}", f"git: {git_sha()}",
+              f"built: {dt.datetime.now().astimezone().isoformat(timespec='seconds')}"]
+    if a.on_host:
+        return package_on_host(name, out, header, remote_items, missing)
+    lines = header + ["", "files:"]
     for f in sorted(out.rglob("*")):
         if f.is_file():
             lines.append(f"  {f.relative_to(out)}  {f.stat().st_size / 1e6:.2f} MB  sha256:{sha256_of(f)[:16]}")
@@ -1141,6 +1270,178 @@ def cmd_package(a) -> int:
     (out / "MANIFEST.txt").write_text("\n".join(lines) + "\n")
     say("\n".join(lines))
     say(f"\npackage at {out}")
+    return 0
+
+
+MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".jpg", ".jpeg", ".png", ".heic")
+
+
+def _mb(n: int | None) -> str:
+    return f"{n / 1e6:.1f} MB" if n is not None else "size unknown"
+
+
+def collect_inputs(name: str, a, inp: Path, made: list, missing: list) -> list:
+    """Fill 04_Inputs_Used/ (review #7/#14/#26, 30 Oct): meta.json and measurements.txt always; with --with-inputs
+    also the videos or frames named in meta.json files[] and the sketch photo(s) from --sketch. Everything not
+    copied is listed under missing with its size and where it is. Returns the items to place on tyrone
+    (--on-host): [{src, rel, bytes, what}]."""
+    remote_items: list = []
+    rows: list = []          # INPUTS.txt lines
+    runs = [name] + ([name + "-b"] if local_run(name + "-b").is_dir() else [])
+    for rn in runs:
+        meta = local_run(rn) / "input" / "meta.json"
+        tag = "" if rn == name else "take_b_"
+        if not meta.exists():
+            missing.append(f"04_Inputs_Used/{tag}meta.json (no runs/{rn}/input/meta.json on the Mac)")
+            continue
+        shutil.copy2(meta, inp / f"{tag}meta.json")
+        made.append(inp / f"{tag}meta.json")
+        m = json.loads(meta.read_text())
+        lines = [f"height_cm: {m.get('height_cm')}"] + [f"{x['what']}: {x['metres']} m ({x.get('method', '')})"
+                                                         for x in m.get("measures", [])]
+        (inp / f"{tag}measurements.txt").write_text("\n".join(lines) + "\n")
+        made.append(inp / f"{tag}measurements.txt")
+        for f in m.get("files", []):
+            is_frames = f.get("name", "").endswith("/")
+            label = f"{tag}{f['name'].rstrip('/')}" + ("/" if is_frames else "")
+            size = f.get("bytes")
+            mac = Path(f["mac_path"]) if f.get("mac_path") else None
+            local_copy = local_run(rn) / "input" / f["name"].rstrip("/")
+            src_mac = mac if mac and mac.exists() else (local_copy if local_copy.exists() and not is_frames else None)
+            where = (f"on the Mac at {src_mac}" if src_mac else "") + \
+                    (("; " if src_mac else "") + f"on tyrone at {f['on_host']}" if f.get("on_host") else "")
+            if not a.with_inputs:
+                missing.append(f"04_Inputs_Used/{label} ({_mb(size)}; {where or 'location not recorded'}): "
+                               "add --with-inputs, or upload the original from the phone")
+                rows.append(f"{label}\t{_mb(size)}\tnot copied\t{where}")
+                continue
+            if a.on_host and f.get("on_host"):
+                remote_items.append({"src": f["on_host"], "rel": f"04_Inputs_Used/{label.rstrip('/')}",
+                                     "bytes": size, "what": label, "frames": is_frames})
+                rows.append(f"{label}\t{_mb(size)}\tplaced on tyrone\t{where}")
+                continue
+            if src_mac and (src_mac.is_file() or src_mac.is_dir()):
+                need = (size or 0) / 1e9 * 1.05 + MAC_MIN_FREE_GB
+                if free_gb(inp) < need:
+                    missing.append(f"04_Inputs_Used/{label} ({_mb(size)}): too big for the Mac's "
+                                   f"{free_gb(inp):.1f} GB free; use --on-host, or upload it from the phone")
+                    rows.append(f"{label}\t{_mb(size)}\tnot copied (Mac disk)\t{where}")
+                    continue
+                if src_mac.is_dir():
+                    shutil.copytree(src_mac, inp / label.rstrip("/"), ignore=shutil.ignore_patterns(".DS_Store"))
+                    made.append(inp / label.rstrip("/"))
+                    rows.append(f"{label}\t{_mb(size)}\tcopied\t{where}")
+                    continue
+                shutil.copy2(src_mac, inp / label)
+                made.append(inp / label)
+                rows.append(f"{label}\t{_mb(size)}\tcopied\t{where}\tsha256:{sha256_of(inp / label)}")
+                continue
+            missing.append(f"04_Inputs_Used/{label} ({_mb(size)}; {where or 'location not recorded'}): "
+                           "not on the Mac; run ns package --with-inputs --on-host, or upload it from the phone")
+            rows.append(f"{label}\t{_mb(size)}\tnot copied\t{where}")
+    sketches = list(a.sketch or [])
+    if not sketches:
+        missing.append("04_Inputs_Used/sketch (no --sketch PHOTO given; the hand sketch of the room)")
+    for sk in sketches:
+        rp = remote_path(sk)
+        if rp:
+            base = f"sketch_{Path(rp).name}"
+            if a.on_host:
+                remote_items.append({"src": rp, "rel": f"04_Inputs_Used/{base}", "bytes": None, "what": base, "frames": False})
+                rows.append(f"{base}\t\tplaced on tyrone\ton tyrone at {rp}")
+                continue
+            probe = remote_probe(rp, "video")
+            if probe and probe["bytes"] <= 50e6 and rsync([f"{HOST}:{rp}", str(inp / base)], quiet=True) == 0:
+                made.append(inp / base)
+                rows.append(f"{base}\t{_mb(probe['bytes'])}\tcopied\tfrom tyrone {rp}\tsha256:{sha256_of(inp / base)}")
+            else:
+                missing.append(f"04_Inputs_Used/{base} (could not fetch tyrone:{rp}; is it there and under 50 MB?)")
+            continue
+        pth = Path(sk).expanduser()
+        if not pth.is_file():
+            missing.append(f"04_Inputs_Used/sketch ({sk} not found)")
+            continue
+        base = f"sketch_{pth.name}"
+        shutil.copy2(pth, inp / base)
+        made.append(inp / base)
+        rows.append(f"{base}\t{_mb(pth.stat().st_size)}\tcopied\ton the Mac at {pth}\tsha256:{sha256_of(inp / base)}")
+    (inp / "INPUTS.txt").write_text("Inputs used for this reconstruction (name, size, status, where it came from)\n"
+                                    + "\n".join(rows) + "\n")
+    made.append(inp / "INPUTS.txt")
+    return remote_items
+
+
+REMOTE_PACKAGE_PY = r"""
+import hashlib, json, os, shutil, subprocess, sys
+plan = json.loads(sys.stdin.read())
+tmp, final = plan["tmp"], plan["final"]
+missing = list(plan["missing"])
+placed = []
+for it in plan["items"]:
+    src = os.path.realpath(it["src"])
+    dst = os.path.join(tmp, it["rel"])
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if not os.path.exists(src):
+        missing.append(f"{it['rel']} (not found on tyrone at {it['src']})")
+        continue
+    # a hard link costs no disk; fall back to a copy only when there is room (15 GB floor)
+    rc = subprocess.run(["cp", "-al" if os.path.isdir(src) else "-l", src, dst], capture_output=True).returncode
+    if rc != 0:
+        need = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(src) for f in fs) if os.path.isdir(src)             else os.path.getsize(src)
+        if shutil.disk_usage(tmp).free - need < 15e9:
+            missing.append(f"{it['rel']} (no room on tyrone to copy {need / 1e6:.0f} MB)")
+            continue
+        (shutil.copytree if os.path.isdir(src) else shutil.copy2)(src, dst)
+    placed.append(it["rel"])
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as fh:
+        for b in iter(lambda: fh.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+lines = list(plan["header"]) + [f"written on tyrone: {final}", "", "files:"]
+total = 0
+for r, _, fs in sorted(os.walk(tmp)):
+    for f in sorted(fs):
+        p = os.path.join(r, f)
+        if f == "MANIFEST.txt":
+            continue
+        n = os.path.getsize(p)
+        total += n
+        lines.append(f"  {os.path.relpath(p, tmp)}  {n / 1e6:.2f} MB  sha256:{sha(p)[:16]}")
+lines += ["", f"total: {total / 1e6:.1f} MB", "", "missing:"] + [f"  {m}" for m in missing]
+with open(os.path.join(tmp, "MANIFEST.txt"), "w") as fh:
+    fh.write("\n".join(lines) + "\n")
+if os.path.exists(final):
+    os.rename(final, final + ".old")
+os.rename(tmp, final)
+shutil.rmtree(final + ".old", ignore_errors=True)
+print("\n".join(lines))
+print(f"PLACED {len(placed)} of {len(plan['items'])}")
+"""
+
+
+def package_on_host(name: str, out: Path, header: list, items: list, missing: list) -> int:
+    """--on-host: copy the Mac-built package to tyrone (runs/<name>/package) and place the inputs there by hard
+    link, so a 4K take never crosses to the Mac (review #6/#7). MANIFEST.txt is written on tyrone."""
+    final = f"{remote_run(name)}/package"
+    tmp = final + ".tmp"
+    if ssh(f"rm -rf {shlex.quote(tmp)} && mkdir -p {shlex.quote(tmp)}", timeout=60).returncode != 0:
+        say(f"ns: cannot create {tmp} on tyrone")
+        return 20
+    if rsync([str(out) + "/", f"{HOST}:{tmp}/"], quiet=True) != 0:
+        say("ns: copying the package to tyrone failed")
+        return 20
+    plan = {"tmp": tmp, "final": final, "items": items, "missing": missing, "header": header}
+    script = REMOTE_PACKAGE_PY.replace("sys.stdin.read()", repr(json.dumps(plan)))
+    res = subprocess.run(["ssh", *SSH_OPTS, HOST, "python3 -"], input=script, text=True, capture_output=True,
+                         timeout=3600)
+    if res.returncode != 0:
+        say(f"ns: building the package on tyrone failed: {res.stderr.strip()[-400:]}")
+        return 20
+    say(res.stdout.rstrip())
+    (out / "MANIFEST.txt").write_text(res.stdout.split("PLACED")[0].rstrip() + "\n")
+    say(f"\npackage written on tyrone at {final} (the Mac copy at {out} lacks the inputs placed there)")
     return 0
 
 
@@ -1281,6 +1582,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--stub-cfg", help="JSON file uploaded as runs/<name>/stub_cfg.json (test stubs)")
     p.add_argument("--no-check", action="store_true")
     p.add_argument("--no-sync", action="store_true")
+    p.add_argument("--repo-dir", help="run from a frozen copy of the code in <remote root>/<DIR> (e.g. repo-room); "
+                                      "with --no-sync, reuse the copy already there")
+    p.add_argument("--move", action="store_true",
+                   help="delete the Mac copy of the video once it is on tyrone (inbox/) and its checksum matches")
     p.add_argument("--no-pull", action="store_true")
     p.add_argument("--detach", action="store_true", help="start the run and return")
     p.add_argument("--dry-run", action="store_true", help="upload, then print the stage plan without running anything")
@@ -1326,7 +1631,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("package", help="assemble the Drive folder contents")
     p.add_argument("name")
-    p.add_argument("--with-inputs", action="store_true", help="copy the original videos and photos")
+    p.add_argument("--with-inputs", action="store_true",
+                   help="put the inputs used (videos or frames from meta.json, --sketch photos) in 04_Inputs_Used")
+    p.add_argument("--sketch", action="append", help="the room sketch photo (Mac path or tyrone:/abs/path); repeatable")
+    p.add_argument("--on-host", action="store_true",
+                   help="write the package on tyrone (runs/<name>/package), placing the inputs there by hard link")
     p.add_argument("--extra", help="folder holding the finished PDFs and the video")
     p.set_defaults(fn=cmd_package)
 

@@ -1,0 +1,8 @@
+[
+  {"id": "meeting-table", "name": "Meeting table", "aliases": ["long table", "conference table", "table", "desk"], "kind": "item", "position": [0.403, 0.685, 0.498], "yaw_deg": 7.1, "radius_m": 0.8, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "wall-tv", "name": "Wall TV", "aliases": ["tv", "television", "screen", "display", "monitor"], "kind": "item", "position": [3.336, 1.141, 0.18], "yaw_deg": -90, "radius_m": 1.0, "notes": "placed by hand with the place editor (build team), 30 Oct; the pin is on the soundbar under the screen, because the screen reflects the room and gives no depth"},
+  {"id": "forest-picture", "name": "Forest picture", "aliases": ["forest", "mural", "painting", "picture", "wall art"], "kind": "item", "position": [-0.834, 1.432, 2.333], "yaw_deg": -120.8, "radius_m": 0.8, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "drinks-shelf", "name": "Drinks shelf", "aliases": ["drinks", "coffee", "snacks", "counter", "shelf", "kitchenette"], "kind": "item", "position": [-2.666, 0.79, -0.089], "yaw_deg": 97.8, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "door", "name": "Door", "aliases": ["exit", "entrance", "glass door", "honka door"], "kind": "item", "position": [-2.31, 1.437, -1.988], "yaw_deg": -15.4, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "armchair", "name": "Armchair", "aliases": ["chair", "wooden chair", "black chair", "seat"], "kind": "item", "position": [2.811, 0.497, -1.592], "yaw_deg": -80.4, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"}
+]

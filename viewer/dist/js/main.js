@@ -2,7 +2,7 @@
 // Frame: metres, +Y up, yaw 0 looks along -Z, positive yaw turns left (CONTRACTS 2.0 and 2.12).
 import * as THREE from "three";
 import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
-import { resolveSceneUrl, fetchJson, validateScene, normaliseScene } from "./scene.js";
+import { resolveSceneUrl, fetchJson, validateScene, normaliseScene, scaleInfo, hdSameAsSd, clearColorOf } from "./scene.js";
 import { Grid, Walker } from "./walker.js";
 import { Governor, buildLadder } from "./governor.js";
 import { FrameStats } from "./stats.js";
@@ -21,6 +21,7 @@ const note = (m) => ns.log.push(`${(performance.now() - t0).toFixed(0)}ms ${m}`)
 
 // ---------------------------------------------------------------------------------------------------------------- helpers
 function toast(msg, ms = 1800) {
+  (ns.toasts = ns.toasts || []).push(msg);                  // kept for the tests: a later toast replaces an earlier one on screen
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast.id); toast.id = setTimeout(() => (t.hidden = true), ms);
 }
@@ -44,7 +45,11 @@ if (!hasWebGL2() || flag("nowebgl")) {
 // ---------------------------------------------------------------------------------------------------------------- renderer
 const stage = $("stage");
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", alpha: false });
-renderer.setClearColor(0x0b0e14, 1);
+const LOAD_CLEAR = [11, 14, 20];                                  // page background; the first-frame probe compares pixels with this colour
+const srgb = (c) => new THREE.Color().setRGB(c[0] / 255, c[1] / 255, c[2] / 255, THREE.SRGBColorSpace);   // 0-255 sRGB, as the canvas shows it
+renderer.setClearColor(srgb(LOAD_CLEAR), 1);
+// Once the splats show, holes (a wall closer than the model has data for) get a neutral colour from the scene, not near-black (finding 46).
+function useSceneClear() { const c = clearColorOf(S.data?.splats?.render); renderer.setClearColor(srgb(c), 1); ns.clearColor = c; }
 stage.appendChild(renderer.domElement);
 const canvas = renderer.domElement;
 const gl = renderer.getContext();
@@ -81,13 +86,13 @@ function applyPixelRatio(pr) {
   renderer.setPixelRatio(pr);
   renderer.setSize(innerWidth, innerHeight);
 }
-function applyStep(step) {
+function applyStep(step, kind = "set") {
   S.maxStdDev = step.maxStdDev;
   if (spark) spark.maxStdDev = step.maxStdDev;
   applyPixelRatio(step.pixelRatio);
   const want = step.mesh || S.baseKind;                     // the last ladder step swaps in the preview file
   if (S.fullLoaded && want && S.active && S.active.userData.kind !== want && S.meshes[want]?.isInitialized !== false && S.meshes[want]) {
-    activate(S.meshes[want]).then(() => { updateHud(true); if (want === "preview") toast(`Reduced detail: ${fmtInt(S.splatCount)} splats`, 2500); });
+    activate(S.meshes[want]).then(() => { updateHud(true); if (want === "preview" && kind !== "down") toast(`Reduced detail: ${fmtInt(S.splatCount)} splats`, 2500); });
   }
   updateHud(true);
 }
@@ -130,6 +135,7 @@ function onSplatProgress(kind, entry, e) {
   S.bytesByUrl.set(entry.url, loaded);
   S.loadedBytes = [...S.bytesByUrl.values()].reduce((a, b) => a + b, 0);
   if (!S.firstFrame || kind === "hd") {
+    $("loader").classList.remove("wait");
     const pct = total ? Math.min(100, (100 * loaded) / total) : null;
     $("bar-fill").style.width = pct == null ? "30%" : pct.toFixed(1) + "%";
     $("loader-sub").textContent = `${kind === "preview" ? "preview" : kind === "hd" ? "HD splats" : "splats"} ${mb(loaded)}${total ? " / " + mb(total) : ""} MB`;
@@ -171,23 +177,37 @@ async function loadSplats() {
   const watchdog = (mesh, ent) => new Promise((_, rej) => setTimeout(() => { if (!(S.bytesByUrl.get(ent.url) > 0)) rej(new Error(`no data from ${ent.url} after 20 s`)); }, 20000));
   try { await Promise.race([m.initialized, watchdog(m, entry)]); }
   catch (e) {
-    // the mirror / override failed (CORS, dead host, stalled): use the scene's own file; with none left, retry the same URL once
+    // the mirror / override failed (CORS, dead host), the link dropped, the host answered 5xx, or nothing arrived for 20 s:
+    // try once more, from the scene's own file when an override was used, else from the same URL
     note(`${kind} failed from ${entry.url}: ${e && e.message || e}`);
-    const retryUrl = entry.fallback || (/no data/.test(String(e && e.message)) ? entry.url : null);
-    if (!retryUrl) throw e;
+    const retryUrl = entry.fallback || entry.url;
     console.warn(`splat file ${entry.url} failed (${e && e.message || e}); trying ${retryUrl}`);
-    toast(entry.fallback ? "Mirror failed, loading the bundled copy" : "Download stalled, retrying", 3000);
+    toast(entry.fallback ? "Mirror failed, loading the bundled copy" : "Download failed, retrying", 3000);
     try { m.dispose(); } catch {}
     S.bytesByUrl.delete(entry.url);
     entry = { ...entry, url: retryUrl, fallback: null };
     m = makeMesh(kind, entry); S.meshes[kind] = m;
-    await m.initialized;
+    try { await Promise.race([m.initialized, watchdog(m, entry)]); }
+    catch (e2) {
+      note(`${kind} failed again from ${entry.url}: ${e2 && e2.message || e2}`);
+      try { m.dispose(); } catch {}
+      S.bytesByUrl.delete(entry.url);
+      // a preview is already on screen and playable: keep it, say so, and let the page be reloaded. The error card is for "nothing to show".
+      if (S.active && S.active.userData.kind === "preview") {
+        S.meshes[kind] = null; S.baseKind = "preview"; S.quality = "low";
+        S.fullLoaded = true; ns.fullFailed = true;
+        $("loader").hidden = true;
+        toast("The full-quality file did not load. Showing the preview (fewer splats). Reload the page to try again.", 9000);
+        return;
+      }
+      throw e2;
+    }
   }
   note(`${kind} initialised, ${numSplats(m)} splats`);
   await activate(m);
   S.fullLoaded = true;
   $("loader").hidden = true;
-  if (sp.hd && kind !== "hd") { $("b-hd").hidden = false; }
+  if (sp.hd && kind !== "hd" && !hdSameAsSd(sp)) { $("b-hd").hidden = false; }      // no HD button when it would load the same file again
   note("splats active");
 }
 
@@ -201,7 +221,13 @@ async function toggleHd() {
   } else {
     btn.textContent = "HD loading…"; $("loader").hidden = false; $("bar-fill").style.width = "0%";
     const hd = S.meshes.hd || makeMesh("hd", sp.hd); S.meshes.hd = hd;
-    await hd.initialized; await activate(hd);
+    try { await hd.initialized; await activate(hd); }
+    catch (e) {                                              // the SD scene stays on screen
+      try { hd.dispose(); } catch {}
+      S.meshes.hd = null; S.bytesByUrl.delete(sp.hd.url);
+      $("loader").hidden = true; btn.textContent = "HD"; toast("HD file did not load; staying on SD", 4000);
+      return;
+    }
     $("loader").hidden = true; btn.classList.add("on"); btn.textContent = "HD"; S.quality = "hd"; S.baseKind = "hd"; S.gov.ladder = S.ladders.hd; S.gov.jumpTo(0); toast("HD splats");
   }
   updateHud(true);
@@ -325,8 +351,20 @@ const updatePaused = () => { $("paused").hidden = S.pointerLocked || S.mode !== 
 document.addEventListener("pointerlockchange", () => { S.pointerLocked = document.pointerLockElement === canvas; updatePaused(); });
 document.addEventListener("pointerlockerror", () => { S.pointerLocked = false; toast("Pointer lock unavailable here: drag to look"); });
 
-// touch: left half drags to move (virtual stick), right half drags to look
-S.touchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+// touch: left half drags to move (virtual stick), right half drags to look.
+// The touch path (tap to start, no pointer lock, thumb hints) is for devices whose main pointer is a finger. A touchscreen laptop
+// reports touch support too, but its main pointer is a mouse or trackpad (pointer: fine, hover: hover), so it gets the desktop path (finding 49).
+// If a mouse moves on a device that first looked like a touch device (a tablet with a mouse), it switches to the desktop path then.
+const FINE_POINTER = matchMedia("(pointer: fine)").matches && matchMedia("(hover: hover)").matches;
+S.touchDevice = !FINE_POINTER && (COARSE || "ontouchstart" in window || navigator.maxTouchPoints > 0);
+function applyTouchUi() {
+  const t = S.touchDevice;
+  $("hint-desk").hidden = t; $("hint-touch").hidden = !t;
+  $("b-measure").hidden = !t;
+  if (!S.started && !$("s-go").disabled) $("s-go").textContent = t ? "Tap to start" : "Click to start";
+  updatePaused();
+}
+addEventListener("pointermove", (e) => { if (S.touchDevice && e.pointerType === "mouse") { S.touchDevice = false; ns.touchSwitched = true; applyTouchUi(); } }, { passive: true });
 const STICK_R = 55;
 const touchBlocked = (t) => !!(t.target && t.target.closest && t.target.closest("button, #mapwrap, .card, #rc-bar, input, textarea, #hud, #srch, #place, #tool, #padd"));
 addEventListener("touchstart", (e) => {
@@ -393,11 +431,7 @@ function toggleHud() {
   clearTimeout(S.hudTimer);
 }
 $("hud").addEventListener("click", toggleHud);
-function scaleText() {
-  const sc = S.data.scale || {};
-  if (sc.pct_68 > 0) return `±${sc.pct_68 < 10 ? sc.pct_68.toFixed(1) : Math.round(sc.pct_68)}%`;
-  return "unchecked";
-}
+const scaleText = () => scaleInfo(S.data.scale).short;
 function qualityText() {
   const st = S.gov?.step; const lab = S.quality === "hd" ? "HD" : S.quality === "low" ? "low" : "SD";
   return st ? `${lab} · ${st.name} · ${S.pr.toFixed(2)}x` : lab;
@@ -413,8 +447,8 @@ function updateHud(force = false) {
   $("h-splats").textContent = fmtInt(S.splatCount);
   $("h-mb").textContent = S.loadedBytes ? `${mb(S.loadedBytes)} MB` : "--";
   $("h-q").textContent = qualityText();
-  $("h-scale").textContent = scaleText();
-  $("chip-scale").textContent = ` · ${scaleText()}`;
+  $("h-scale").textContent = scaleText(); $("h-scale").title = scaleInfo(S.data.scale).long;
+  $("chip-scale").textContent = ` · scale ${scaleText()}`;
   $("h-gpu").textContent = GPU + (SOFTWARE ? " (software)" : "");
 }
 
@@ -443,7 +477,7 @@ function startBench(auto = false) {
   const path = new TourPath(S.data.tour, 60); path.retime(secs);
   if (document.pointerLockElement) document.exitPointerLock();
   S.bench = { path, start: null, secs, auto, gov: S.gov.enabled, level: S.gov.level, saved: { x: S.walker.x, z: S.walker.z, yaw: S.walker.yaw, pitch: S.walker.pitch, eyeY: S.eyeY } };
-  S.gov.enabled = false;
+  S.gov.setEnabled(false);
   S.mode = "bench";
   $("hud").hidden = false; $("hud").classList.add("expanded"); $("hud").classList.remove("chip");
   $("b-title").textContent = "Tour benchmark"; $("b-res").textContent = ""; $("b-close").hidden = true; $("b-copy").hidden = true; $("b-fill").style.width = "0%";
@@ -471,13 +505,13 @@ function finishBench() {
   $("b-res").textContent = `avg ${res.avg_fps} fps   p95 ${res.p95_ms} ms   (p50 ${res.p50_ms}, p99 ${res.p99_ms})\n${fmtInt(res.splats)} splats   ${res.mb} MB\nGPU  ${res.gpu}\n${res.viewport}  quality ${res.quality}  pixel ratio ${res.pixel_ratio}  ${res.secs} s, ${res.frames} frames`;
   $("b-close").hidden = false; $("b-copy").hidden = false;
   $("bench").style.pointerEvents = "auto";
-  S.gov.enabled = b.gov; S.bench = null; S.mode = "play";
+  S.gov.setEnabled(b.gov); S.bench = null; S.mode = "play";
   const sv = b.saved; S.walker.x = sv.x; S.walker.z = sv.z; S.walker.yaw = sv.yaw; S.walker.pitch = sv.pitch; S.eyeY = sv.eyeY;
   note("bench done " + JSON.stringify({ fps: res.avg_fps, p95: res.p95_ms }));
 }
 function stopBench(cancel) {
   const b = S.bench; if (!b) return;
-  S.stats.endRun(); S.gov.enabled = b.gov; S.bench = null; S.mode = "play";
+  S.stats.endRun(); S.gov.setEnabled(b.gov); S.bench = null; S.mode = "play";
   const sv = b.saved; S.walker.x = sv.x; S.walker.z = sv.z; S.walker.yaw = sv.yaw; S.walker.pitch = sv.pitch; S.eyeY = sv.eyeY;
   $("bench").hidden = true; if (cancel) toast("Benchmark cancelled");
 }
@@ -532,7 +566,7 @@ function setSlider(v) {
   $("rc-photo").style.clipPath = `inset(0 ${100 - v}% 0 0)`; $("rc-line").style.left = v + "%";
 }
 function exitReality() {
-  S.mode = "play"; S.reality = null; $("reality").hidden = true; $("mapwrap").style.visibility = ""; $("bottom").style.visibility = "";
+  S.mode = "play"; S.reality = null; $("reality").hidden = true; $("mapwrap").style.visibility = ""; $("bottom").style.visibility = ""; S.gov?.reset();
   canvas.style.position = ""; canvas.style.left = ""; canvas.style.top = "";
   renderer.setPixelRatio(S.pr); renderer.setSize(innerWidth, innerHeight);
 }
@@ -554,10 +588,14 @@ function drawSplatProbe() {
   let hits = 0;
   for (let j = 1; j <= 6; j++) for (let i = 1; i <= 8; i++) {
     gl.readPixels(Math.floor((w * i) / 9), Math.floor((h * j) / 7), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    if (Math.abs(px[0] - 11) + Math.abs(px[1] - 14) + Math.abs(px[2] - 20) > 12) hits++;
+    if (Math.abs(px[0] - LOAD_CLEAR[0]) + Math.abs(px[1] - LOAD_CLEAR[1]) + Math.abs(px[2] - LOAD_CLEAR[2]) > 12) hits++;
   }
   return hits >= 6;
 }
+
+// A hidden tab stops requestAnimationFrame. The first frame back would show a gap of seconds, so forget the timer and what the governor saw.
+document.addEventListener("visibilitychange", () => { S.stats.last = null; S.gov?.reset(); });
+addEventListener("pageshow", () => { S.stats.last = null; S.gov?.reset(); });
 
 let lastNow = null;
 function frame(now) {
@@ -576,6 +614,7 @@ function frame(now) {
   renderer.render(scene, S.mode === "reality" ? rcCam : camera);
   if (S.splatCount && !S.sawSplats && S.frames > 2 && drawSplatProbe()) {
     S.sawSplats = true; ns.firstFrameMs = performance.now(); ns.firstSplatCount = S.splatCount; note("first splat frame");
+    useSceneClear();
     onFirstFrame();
   }
   if (S.guide) S.guide.update(now, dtS);
@@ -597,10 +636,11 @@ function onFirstFrame() {
 }
 
 // ---------------------------------------------------------------------------------------------------------------- start card
-function startPlay() {
+function startPlay(e) {
   if (S.started) return;
   S.started = true; $("start").hidden = true;
-  if (!S.touchDevice) { try { const p = canvas.requestPointerLock?.(); p?.catch?.(() => {}); } catch {} }
+  const byFinger = e && e.pointerType ? e.pointerType === "touch" : S.touchDevice;     // a mouse click on a touchscreen laptop still locks the pointer
+  if (!byFinger) { try { const p = canvas.requestPointerLock?.(); p?.catch?.(() => {}); } catch {} }
   $("bottom").hidden = false;
 }
 $("s-go").addEventListener("click", startPlay);
@@ -663,6 +703,7 @@ const walkerCfg = () => ({ eyeHeight: S.data.camera.eye_height, walkMps: S.data.
 // ---------------------------------------------------------------------------------------------------------------- boot
 async function boot() {
   try {
+    $("loader-sub").textContent = "Viewer code loaded. Reading the scene description.";
     const { url, index } = await resolveSceneUrl(location.href, P);
     note("scene url " + url);
     const raw = await fetchJson(url);
@@ -673,14 +714,16 @@ async function boot() {
     document.title = `${d.title || d.name} · Namma Space`;
     $("s-title").textContent = d.title || d.name;
     const prov = d.provenance || {};
-    $("s-sub").textContent = `${prov.kind === "fixture" ? "Test fixture. " : ""}${d.splats?.sd?.count ? fmtInt(d.splats.sd.count) + " Gaussian splats. " : ""}Walk it like a game; it is a photoreal twin of a real room.`;
+    $("s-sub").textContent = `${prov.kind === "fixture" ? "Test fixture. " : ""}${d.splats?.sd?.count ? fmtInt(d.splats.sd.count) + " Gaussian splats. " : ""}Walk through it like a game. It is a Gaussian-splat reconstruction${prov.kind === "fixture" ? "" : " of a real room"}.`;
+    { const si = scaleInfo(d.scale); $("path-scale").innerHTML = si.checked
+      ? `<b>Scale</b>: the stats badge says how the scale was checked (${si.short}). Press <kbd>K</kbd> and click two points to measure.`
+      : `<b>Scale</b>: the stats badge shows an estimate of the scale and its 68% range, from camera height. It is not a measured error. Press <kbd>K</kbd> and click two points to measure.`; }
     $("s-prov").textContent = [prov.source, prov.license && `License ${prov.license}`, prov.attribution].filter(Boolean).join(" · ");
     const others = (index?.scenes || []).filter((x) => x.name !== d.name);
     if (others.length) {
       const el = $("s-others"); el.hidden = false;
       el.innerHTML = "Other scenes: " + others.map((x) => `<a href="?scene=${encodeURIComponent(x.name)}">${(x.title || x.name).replace(/[<&]/g, "")}</a>`).join(" &middot; ");
     }
-    if (S.touchDevice && matchMedia("(pointer: coarse)").matches) $("b-hint").innerHTML = `left thumb walks &middot; right thumb looks &middot; tap the map to enlarge`;
     camera.fov = d.camera.fov_y_deg; camera.near = d.camera.near; camera.far = d.camera.far; camera.updateProjectionMatrix();
     S.eyeY = d.camera.eye_height;
     if (FLAGS.bench) S.started = true;
@@ -701,11 +744,17 @@ async function boot() {
     S.ladders = { sd: lad(false), hd: lad(true) };
     const ladder = QEFF === "hd" && d.splats.hd ? S.ladders.hd : S.ladders.sd;
     let start = 0;
-    if (QEFF === "low") start = ladder.findIndex((l) => l.name === "low");
-    S.gov = new Governor({ ladder, start, onStep: (step, level, why) => { applyStep(step); note(`governor -> ${step.name} (${why})`); toast(`Quality: ${step.name}`, 1200); } });
+    if (QEFF === "low") start = Math.max(0, ladder.findIndex((l) => l.name === "low"));          // no "low" step when it would equal "standard"
+    // a step down is a trial: it stays only if the frame rate rises (capped or paused frames do not). The toast waits for that.
+    S.gov = new Governor({
+      ladder, start,
+      onStep: (step, level, why, kind) => { applyStep(step, kind); note(`governor -> ${step.name} (${kind}: ${why})`); if (kind !== "down" && kind !== "revert") toast(`Quality: ${step.name}`, 1200); },
+      onConfirm: (step) => { note(`governor kept ${step.name}`); toast(step.mesh === "preview" ? `Reduced detail: ${fmtInt(S.splatCount)} splats` : `Quality: ${step.name}`, step.mesh === "preview" ? 2500 : 1200); },
+    });
     ns.governor = S.gov;
     applyStep(S.gov.step);
 
+    $("loader-sub").textContent = "Loading the room files.";
     // grid, minimap, splats in parallel
     const gridP = decodeGrid(d.grid);
     const mapP = d.minimap?.url ? loadImage(d.minimap.url).catch(() => null) : Promise.resolve(null);
@@ -725,7 +774,7 @@ async function boot() {
     S.minimap.size(smallMapPx());
     S.guide = new Guide({ S, camera, canvas, scene, toast, updatePaused });
     S.guide.init(d.places);
-    $("b-measure").hidden = !(S.touchDevice && matchMedia("(pointer: coarse)").matches);      // phones have no K key
+    applyTouchUi();                                                                          // phones have no K key: the Measure button and the thumb hint
     S.minimap.onPlace = (p) => { if (S.touchDevice && !$("mapwrap").classList.contains("large")) { cycleMap(); return; } S.guide.select(p); };
     if (FLAGS.place && S.guide.select(FLAGS.place)) { if (FLAGS.follow) S.guide.startFollow(); else if (FLAGS.route) S.guide.toggleRoute(); }
     S.minimap.buildTint();

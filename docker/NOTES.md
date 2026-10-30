@@ -73,3 +73,14 @@ It works: on the honka long capture (335 frames) with `--SequentialMatching.loop
 cannot reach, so they come from loop detection. That run registered 316/335 (94.3%) in one model at 0.82 px, against 290/335
 (87%, 0.75 px) in the smoke test without loop detection. We did not run the control (same settings, loop detection off), and the
 mapper is not seeded, so we do not claim the 7-point gain is caused by loop detection.
+
+## Host wrapper in the repo (review fix #13, 30 Oct)
+`docker/nsdocker` is the wrapper that was only on tyrone as `bin/nsdocker`, with the root taken from `NS_ROOT`
+(default: the folder above its own bin/) and the code folder inside the container from `NS_WORKDIR` (default
+`/w/repo`; `ns run --repo-dir` sets `/w/<frozen copy>`). The limits are unchanged by default (15 GB disk floor,
+3 containers, 12 GB GPU memory, 20 GB RAM, 24 CPUs) and can be set with `NS_MIN_FREE_GB`, `NS_MAX_CONTAINERS`,
+`NS_GPU_MIN_FREE_MB`, `NS_MEMORY`, `NS_CPUS`. It now checks the disk where the root is, not `/`.
+`docker/install_host.sh ROOT` makes the folders and GPU slot locks and installs the wrapper as ROOT/bin/nsdocker;
+`docker/fetch_cache.sh ROOT` downloads the five COLMAP files and checks the SHA-256 listed in IMAGES.md.
+tyrone's own `bin/nsdocker` was not replaced (other runs use it); a run from a frozen copy uses the copy's
+`docker/nsdocker`. Setup steps for a new host: test/README.md, "What you need".

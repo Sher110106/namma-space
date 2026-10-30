@@ -65,7 +65,7 @@ sys.path.insert(0, str(REPO_DEFAULT))
 
 from pipeline.common import stage as st  # noqa: E402
 
-NS_ROOT_DEFAULT = "/home/sher/namma-space"
+NS_ROOT_DEFAULT = os.environ.get("NS_ROOT", "/home/sher/namma-space")
 NSDOCKER_DEFAULT = os.environ.get("NSDOCKER", f"{NS_ROOT_DEFAULT}/bin/nsdocker")
 RUN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,40}$")
 RESCALE = st.StageInfo("rescale", "pipeline.align.rescale", (), "", st.GPU_IMAGE, False)
@@ -73,7 +73,7 @@ EXIT_PRIORITY = {0: 0, 11: 1, 30: 2, 10: 3, 20: 4}
 # Wall limit per stage in minutes, counted from the moment its container runs (queueing for a GPU slot is
 # not counted; that has its own limit). A stage past its limit is stopped and recorded as exit 20, so a
 # hung tool can never hold the run (or the GPU) for hours. Override: --stage-timeout STAGE=MIN.
-STAGE_LIMIT_MIN = {"ingest": 45, "sfm": 150, "align": 30, "train": 240, "geometry": 60, "export": 60,
+STAGE_LIMIT_MIN = {"ingest": 45, "sfm": 150, "align": 30, "train": 330, "geometry": 60, "export": 60,
                    "grid": 20, "rescale": 15}
 QUEUE_LIMIT_MIN = 240
 BEAT_S = float(os.environ.get("NS_RUNNER_BEAT_S", "10"))   # status heartbeat and limit check interval
@@ -105,6 +105,13 @@ class Runner:
         self.current_container = ""
         self.image_over = dict(x.split("=", 1) for x in args.image)
         self.scripts = dict(x.split("=", 1) for x in args.script)
+        self.container_repo = self.repo_in_container()
+        self.nsdocker = args.nsdocker
+        if self.container_repo != "/w/repo" and not getattr(args, "nsdocker_given", False):
+            # a frozen copy (ns run --repo-dir): its own wrapper honours NS_WORKDIR; an older bin/nsdocker may not
+            own = self.repo / "docker" / "nsdocker"
+            if own.exists():
+                self.nsdocker = str(own)
         self.stage_limits = dict(STAGE_LIMIT_MIN)
         for x in args.stage_timeout:
             k, v = x.split("=", 1)
@@ -158,6 +165,14 @@ class Runner:
 
     # ---------------------------------------------------------------- commands
 
+    def repo_in_container(self) -> str:
+        """Where the code is inside containers: /w/<repo relative to the namma-space root>. A frozen copy made by
+        `ns run --repo-dir repo-room` is /w/repo-room, so later edits to repo/ cannot change a running build."""
+        rel = os.path.relpath(self.repo, Path(self.a.ns_root).resolve())
+        if rel.startswith("..") or rel == ".":
+            return "/w/repo"
+        return "/w/" + rel
+
     def container_run_dir(self) -> str:
         rel = os.path.relpath(self.dir, self.a.ns_root)
         if rel.startswith(".."):
@@ -182,10 +197,10 @@ class Runner:
             if self.a.no_docker:
                 prog = [sys.executable, str(self.module_path(info))]
             else:
-                prog = ["python3", f"/w/repo/{rel}"]
+                prog = ["python3", f"{self.container_repo}/{rel}"]
             if self.a.no_docker:
                 return prog + self.stage_argv(info, str(self.dir)), env, container
-            pre = [self.a.nsdocker] + (["--gpu"] if info.gpu else []) + [container, self.image_for(info)]
+            pre = [self.nsdocker] + (["--gpu"] if info.gpu else []) + [container, self.image_for(info)]
             envargs = ["env"] + [f"{k}={v}" for k, v in env.items()]
             return pre + envargs + prog + self.stage_argv(info, self.container_run_dir()), env, container
         if self.a.no_docker:
@@ -198,10 +213,10 @@ class Runner:
         if self.a.stub_dir:
             d = Path(self.a.stub_dir)
             rel = d if not d.is_absolute() else d.relative_to(self.repo)
-            prog = ["python3", f"/w/repo/{rel}/{info.name}.py"]
+            prog = ["python3", f"{self.container_repo}/{rel}/{info.name}.py"]
         else:
             prog = ["python3", "-m", info.module]
-        pre = [self.a.nsdocker] + (["--gpu"] if info.gpu else []) + [container, self.image_for(info)]
+        pre = [self.nsdocker] + (["--gpu"] if info.gpu else []) + [container, self.image_for(info)]
         envargs = ["env"] + [f"{k}={v}" for k, v in env.items()]
         return pre + envargs + prog + self.stage_argv(info, self.container_run_dir()), env, container
 
@@ -248,7 +263,8 @@ class Runner:
                "flags": flags, "warnings": warns, "manual_overrides": overrides, "exit": exit_code,
                "incomplete": self.incomplete, "host": socket.gethostname(),
                "started": self.status["started"], "ended": now() if exit_code is not None else None,
-               "stages": self.status["stages"], "argv": sys.argv[1:]}
+               "stages": self.status["stages"], "argv": sys.argv[1:],
+               "repo": str(self.repo), "repo_in_container": self.container_repo}
         if exit_code is not None:
             history = (history + [{"started": rec["started"], "ended": rec["ended"], "exit": exit_code,
                                    "flags": flags}])[-30:]
@@ -299,6 +315,10 @@ class Runner:
                 say(f"stopping leftover container {container}")
                 self.stop_container(container)
         proc_env = dict(os.environ, **env)
+        if not self.a.no_docker:
+            # read by nsdocker (docker/nsdocker): the mount root and the code directory inside the container
+            proc_env["NS_ROOT"] = str(Path(self.a.ns_root).resolve())
+            proc_env["NS_WORKDIR"] = self.container_repo
         proc_env["PYTHONPATH"] = f"{self.repo}{os.pathsep}{proc_env.get('PYTHONPATH', '')}".rstrip(os.pathsep)
         with log_path.open("a") as fh:
             fh.write(f"=== {now()} start {label}: {' '.join(cmd)}\n")
@@ -631,7 +651,7 @@ def parse_args(argv: list) -> argparse.Namespace:
     ap.add_argument("--ns-root", default=NS_ROOT_DEFAULT)
     ap.add_argument("--runs-root", default=None)
     ap.add_argument("--repo", default=str(REPO_DEFAULT))
-    ap.add_argument("--nsdocker", default=NSDOCKER_DEFAULT)
+    ap.add_argument("--nsdocker", default=None, help="host wrapper (default <ns-root>/bin/nsdocker)")
     ap.add_argument("--stage-timeout", action="append", default=[],
                     help="STAGE=MINUTES wall limit once the stage's container runs (defaults: "
                          + ", ".join(f"{k} {v}" for k, v in STAGE_LIMIT_MIN.items()) + ")")
@@ -641,6 +661,8 @@ def parse_args(argv: list) -> argparse.Namespace:
     if not RUN_NAME_RE.match(a.run):
         ap.error(f"run name {a.run!r} must match {RUN_NAME_RE.pattern}")
     a.runs_root = a.runs_root or os.path.join(a.ns_root, "runs")
+    a.nsdocker_given = a.nsdocker is not None or "NSDOCKER" in os.environ
+    a.nsdocker = a.nsdocker or os.environ.get("NSDOCKER") or os.path.join(a.ns_root, "bin", "nsdocker")
     for o in a.opt:
         if ":" not in o:
             ap.error(f"--opt needs STAGE:ARG, got {o!r}")

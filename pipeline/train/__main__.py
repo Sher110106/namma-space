@@ -1,6 +1,12 @@
 """Stage `train`: gsplat MCMC training, variants R0 and R1 (FINAL_PLAN 2.5, WP3).
 
-    python -m pipeline.train --run /w/runs/<name> [--quick] [--variants r0,r1] [--parallel auto|yes|no]
+    python -m pipeline.train --run /w/runs/<name> [--quick] [--variants r0[,r1]] [--parallel auto|yes|no]
+                             [--long-side N] [--max-minutes M]
+
+Defaults (review fix #4/#10, 30 Oct): one variant (r0), frames resized so the long side is at most
+TRAIN_LONG_SIDE px (gsplat scales the intrinsics to the image size it reads), and a wall limit of
+150 min per variant. r1 (r0 + depth loss) doubles the time and crashed on vr_room; ask for it with
+--variants r0,r1. The step rates behind the default size are in pipeline/train/NOTES.md.
 
 Reads 40_align/ (images/, sparse/0/ in the final frame), writes 50_train/ through a temp
 directory (50_train.tmp, renamed when complete). While running, 50_train.tmp/progress.json
@@ -32,6 +38,44 @@ PROGRESS_S = 8.0
 KILL_GRACE_S = 30.0      # SIGTERM -> SIGKILL
 ABANDON_S = 60.0         # SIGKILL -> give up waiting (process stuck in the driver)
 STALL_S = 900.0          # no trainer output for this long = hung (default; --stall-minutes)
+FULL_WALL_MIN = 150.0    # wall limit per variant, full run (review fix #4/#10; was 90)
+QUICK_WALL_MIN = 30.0
+TRAIN_LONG_SIDE = 1920   # default long side, px: 1919x1278 projected 64.4 min per 30k steps (NOTES.md "1920 px timing")
+DEFAULT_VARIANTS = "r0"  # r1 = r0 + depth loss; behind --variants r0,r1
+
+
+def image_size(images_dir: str):
+    """(width, height) of the first image, or None."""
+    try:
+        from PIL import Image
+        first = sorted(f for f in os.listdir(images_dir) if not f.startswith("."))[0]
+        with Image.open(os.path.join(images_dir, first)) as im:
+            return im.size
+    except (OSError, IndexError, ImportError):
+        return None
+
+
+def resized_data_dir(data_dir: str, tmp: str, long_side: int) -> tuple:
+    """When the frames are larger than long_side, write a copy resized to long_side (JPEG q95) to <tmp>/data/images
+    with data/sparse -> the model, and return (that dir, new size). gsplat reads the first image's size and scales
+    the COLMAP intrinsics to it (datasets/colmap.py, gsplat 1.5.3). Otherwise return (data_dir, size)."""
+    size = image_size(os.path.join(data_dir, "images"))
+    if not long_side or size is None or max(size) <= long_side:
+        return data_dir, size
+    from PIL import Image
+    out = os.path.join(tmp, "data")
+    os.makedirs(os.path.join(out, "images"), exist_ok=True)
+    s = long_side / max(size)
+    new = None
+    for f in sorted(os.listdir(os.path.join(data_dir, "images"))):
+        if f.startswith("."):
+            continue
+        with Image.open(os.path.join(data_dir, "images", f)) as im:
+            w, h = im.size
+            new = (round(w * s), round(h * s))
+            im.convert("RGB").resize(new, Image.LANCZOS).save(os.path.join(out, "images", f), quality=95)
+    os.symlink(os.path.abspath(os.path.join(data_dir, "sparse")), os.path.join(out, "sparse"))
+    return out, new
 
 
 def log(msg: str) -> None:
@@ -315,7 +359,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--run", required=True, help="run directory, e.g. /w/runs/room")
     ap.add_argument("--data-dir", help="override <run>/40_align (smoke tests)")
     ap.add_argument("--quick", action="store_true", help="7k steps instead of 30k")
-    ap.add_argument("--variants", default="r0,r1")
+    ap.add_argument("--variants", default=DEFAULT_VARIANTS,
+                    help="comma list of r0, r1 (r0 + depth loss), r0nb (default r0; r1 doubles the time)")
+    ap.add_argument("--long-side", type=int, default=TRAIN_LONG_SIDE,
+                    help=f"resize training frames so the long side is at most this (default {TRAIN_LONG_SIDE}; 0 = as is)")
     ap.add_argument("--parallel", choices=["auto", "yes", "force", "no"], default="auto")
     ap.add_argument("--normalize", action="store_true",
                     help="gsplat world normalisation ON (frame-check tests only; the pipeline runs with it off)")
@@ -323,7 +370,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="do not rescale MCMC noise and scale_reg by the scene unit (reproduces the failure)")
     ap.add_argument("--cap-max", type=int, default=1_500_000)
     ap.add_argument("--max-minutes", type=float, default=None,
-                    help="wall limit per variant, from its own start (default 90 full, 30 quick)")
+                    help=f"wall limit per variant, from its own start (default {FULL_WALL_MIN:.0f} full, {QUICK_WALL_MIN:.0f} quick)")
     ap.add_argument("--stall-minutes", type=float, default=STALL_S / 60,
                     help="stop a variant whose log shows no output for this long (0 = off)")
     ap.add_argument("--keep-losers", action="store_true")
@@ -361,7 +408,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parallel, lock, why_par = G.decide_parallel(a.parallel, len(names), a.lock_dir)
     log(why_par)
     eval_steps = C.TrainOpts("", "", quick=a.quick).eval_steps
-    max_wall_s = 60 * (a.max_minutes if a.max_minutes is not None else (30.0 if a.quick else 90.0))
+    max_wall_s = 60 * (a.max_minutes if a.max_minutes is not None else (QUICK_WALL_MIN if a.quick else FULL_WALL_MIN))
     stall_s = 60 * a.stall_minutes
     t_stage = time.time()
 
@@ -383,6 +430,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not a.normalize and not a.no_scene_unit:
         k = C.scene_unit([im.centre() for im in colmap_io.read_images(data_dir).values()])
         log(f"scene unit k = {k:.4f} model units (median camera distance); noise_lr/k^2, scale_reg/k")
+    src_data_dir = data_dir
+    src_size = image_size(os.path.join(data_dir, "images"))
+    data_dir, train_size = resized_data_dir(data_dir, tmp, a.long_side)
+    if train_size != src_size:
+        log(f"training frames resized from {src_size[0]}x{src_size[1]} to {train_size[0]}x{train_size[1]} "
+            f"(--long-side {a.long_side})")
     jobs = mk_jobs(names)
     try:
         samples = run_jobs(jobs, parallel, tmp, max_wall_s, stall_s)
@@ -439,15 +492,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         if r.get("nan_dropped"):
             warnings.append(f"{r['name']}: {r['nan_dropped']} NaN/Inf splats dropped by the PLY exporter")
     cleanup(tmp, recs, chosen, a.keep_losers, a.quick)
+    shutil.rmtree(os.path.join(tmp, "data"), ignore_errors=True)    # the resized copy, if any
 
     result = {
         "schema": "namma-space/train@1",
         "variants": recs, "chosen": chosen, "why": why,
         "chosen_ply": best.get("final_ply") if best else None,
         "preview_ply": f"{a.stage_dir}/{chosen}/ply/{C.TrainOpts('', '').preview_ply_name}" if chosen else None,
-        "quick": a.quick, "normalize_world_space": a.normalize, "data_dir": data_dir,
+        "quick": a.quick, "normalize_world_space": a.normalize, "data_dir": src_data_dir,
         "parallel": parallel, "parallel_reason": why_par, "cap_max": a.cap_max, "scene_unit_k": k,
         "test_every": 8, "eval_steps": eval_steps, "wall_s": round(time.time() - t_stage, 1),
+        "frame_size_in": list(src_size) if src_size else None, "frame_size_train": list(train_size) if train_size else None,
+        "long_side": a.long_side, "max_minutes": round(max_wall_s / 60, 1),
         "warnings": warnings,
     }
     _atomic_json(os.path.join(tmp, "train.json"), result)

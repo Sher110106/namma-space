@@ -72,3 +72,39 @@ export async function resolveSceneUrl(pageUrl, params) {
   if (!name) throw new Error("scenes/index.json has no default scene");
   return { url: new URL(`${encodeURIComponent(name)}/scene.json`, base).href, index };
 }
+
+const fmtPct = (v) => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
+
+/**
+ * What the viewer says about the scale (review findings 29 and 44). The 68% range in scene.json comes from a prior on the camera
+ * height, not from a measurement, so it is called an estimate. Only a scene whose scale.checked_against is set (a tape check,
+ * written by bundle.py from 40_align/rescale.json) gets the word "checked", and then no range is quoted from the prior.
+ */
+export function scaleInfo(sc) {
+  sc = sc || {};
+  const pct = +sc.pct_68 > 0 ? +sc.pct_68 : 0;
+  if (sc.checked_against) {
+    const against = String(sc.checked_against);
+    const e = typeof sc.check_error_pct === "number" && Number.isFinite(sc.check_error_pct) ? sc.check_error_pct : null;
+    const signed = e === null ? "" : `${e >= 0 ? "+" : "-"}${Math.abs(e).toFixed(1)}%`;
+    return { checked: true, pct: 0, short: e === null ? `checked (${against})` : `${against} check ${signed}`,
+      long: `Scale checked against a ${against} measure${e === null ? "" : `: the automatic scale was off by ${signed}`}.` };
+  }
+  if (pct > 0) return { checked: false, pct, short: `est. ±${fmtPct(pct)}%`, long: `Estimated scale, 68% range ±${fmtPct(pct)}%. It comes from a prior on camera height; it is not a measured error.` };
+  return { checked: false, pct: 0, short: "unchecked", long: "The scale of this scene was not checked." };
+}
+
+/** True when the HD entry would load the same splats as the SD entry (older bundles listed an identical copy; review findings 19 and 47). */
+export function hdSameAsSd(sp) {
+  if (!sp?.hd || !sp?.sd) return false;
+  if (sp.hd.url === sp.sd.url) return true;
+  return !!sp.hd.bytes && sp.hd.bytes === sp.sd.bytes && sp.hd.count === sp.sd.count && sp.hd.sh_degree === sp.sd.sh_degree;
+}
+
+/** The colour behind the splats where nothing is drawn (holes, a wall closer than the model has data for). [r, g, b] 0-255 from scene.json, else a neutral grey. */
+export const DEFAULT_CLEAR = [60, 58, 55];
+export function clearColorOf(render) {
+  const c = render?.clear_color;
+  if (Array.isArray(c) && c.length === 3 && c.every((v) => Number.isFinite(v) && v >= 0 && v <= 255)) return c.map((v) => Math.round(v));
+  return DEFAULT_CLEAR.slice();
+}

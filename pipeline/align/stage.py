@@ -137,7 +137,8 @@ def run_stage(run_dir: str, height_cm: Optional[float] = None, seed: int = 0, ma
         "after": chk,
         "seed": seed, "seconds": round(time.time() - t0, 1),
     }
-    gate_reasons = [f for f in out["flags"] if f.startswith(("up cues disagree", "no floor", "H_cap x scale", "H_cap is not"))]
+    gate_reasons = [f for f in out["flags"] if f.startswith(("up cues disagree", "no floor", "H_cap x scale", "H_cap is not",
+                                                             "scale cues disagree"))]
     out["gate"] = {"passed": not gate_reasons, "reasons": gate_reasons}
     if make_figure:
         try:

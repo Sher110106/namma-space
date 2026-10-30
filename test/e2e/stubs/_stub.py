@@ -23,6 +23,9 @@ IDENT = [[1.0, 0, 0, 0], [0, 1.0, 0, 0], [0, 0, 1.0, 0], [0, 0, 0, 1.0]]
 def call_log(run: Path, stage: str, what: str) -> None:
     with (run / "stub_calls.log").open("a") as fh:
         fh.write(f"{stage} {what} {time.time():.3f}\n")
+    if what == "start":   # where the code ran from (test of ns run --repo-dir)
+        with (run / "stub_where.log").open("a") as fh:
+            fh.write(f"{stage} {Path(__file__).resolve().parent}\n")
 
 
 def tfinal_scale(run: Path) -> float:

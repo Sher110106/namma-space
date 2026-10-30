@@ -200,6 +200,14 @@ def _drop_candidate_files(out_dir: str, info: dict) -> None:
             os.remove(os.path.join(out_dir, f))
 
 
+def _same_file(a: str, b: str) -> bool:
+    if os.path.getsize(a) != os.path.getsize(b):
+        return False
+    import hashlib
+    h = [hashlib.sha256(open(p, "rb").read()).hexdigest() for p in (a, b)]
+    return h[0] == h[1]
+
+
 def _finalise_candidate(out_dir: str, info: dict, name: str) -> None:
     """Rename splat_<tag>.* to splat_<name>.* and fix the recorded file names and command."""
     tag = info.pop("_tag")
@@ -452,11 +460,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     if tool is None and not a.no_hd:
         warnings.append("hd skipped: the .splat fallback is SH0, so a bigger file adds nothing over SD")
         a.no_hd = True
+    if not a.no_hd and res["sd"].get("sh") == 3 and res["sd"].get("count") == len(s_clean) and len(s_clean) <= a.hd_max:
+        # review #19/#38/#47: SD already holds every cleaned splat at SH3, so an HD file would be the same bytes
+        # (honka and vr_room shipped two identical 16 MB files). Write none; the viewer then shows no HD button.
+        res["hd_skipped"] = {"reason": f"SD already holds all {len(s_clean)} cleaned splats at SH3 (the SD SH search "
+                                       f"needed SH3); an HD file would equal it byte for byte", "same_as": "sd"}
+        a.no_hd = True
     if not a.no_hd:
         res["hd"] = build_target("hd", s_clean, a.hd_max, 3, tmp, scratch, tool, a.spz_version, a.prune_mode, cams_ho,
                                  base_psnr, BUDGET_MB["hd"], warnings, False, retry_shrink=True)
         res["hd"].pop("_per_image", None)
         res["hd"].pop("_decoded", None)
+        sd_f, hd_f = os.path.join(tmp, res["sd"]["file"]), os.path.join(tmp, res["hd"]["file"])
+        if os.path.isfile(sd_f) and os.path.isfile(hd_f) and _same_file(sd_f, hd_f):
+            _drop_candidate_files(tmp, {**res["hd"], "_tag": "hd"})
+            res["hd_skipped"] = {"reason": "the HD file came out byte-identical to SD; not shipped", "same_as": "sd"}
+            res["hd"] = None
     res["preview"] = None
     if not a.no_preview:
         res["preview"] = build_target("preview", s_clean, a.preview_n, 0, tmp, scratch, tool, a.spz_version,

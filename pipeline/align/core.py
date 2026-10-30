@@ -589,14 +589,33 @@ def align_model(model: cio.Model, height_m: Optional[float] = None, seed: int = 
     yaw_dir, yaw_info = (yaw_from_walls(ur.walls, ur.up) if use_yaw else (None, {"clear": False, "reason": "disabled"}))
     S, R, t = build_similarity(model, ur, floor_h, s, yaw_dir)
     h_cap_m = ht["h_cap"] * s
-    if not (1.0 <= h_cap_m <= 1.8):
-        flags.append(f"H_cap x scale = {h_cap_m:.2f} m is outside 1.0-1.8 m: scale or floor error")
+    flags += scale_flags(cues, h_cap_m)
     if ur.ceiling_h is not None:
         ceil_m = (ur.ceiling_h - floor_h) * s
         if not (2.0 <= ceil_m <= 4.5):
             flags.append(f"ceiling at {ceil_m:.2f} m is outside 2.0-4.5 m: the camera-height scale is suspect (phone held higher or lower than assumed?)")
     return AlignResult(S=S, s=s, R=R, t=t, up=ur, floor_h=floor_h, floor_info=floor_info, height=ht, cues=cues,
                        sigma_log=sigma, yaw=yaw_info, flags=flags, h_cap_m=h_cap_m)
+
+
+def scale_flags(cues: List[Cue], h_cap_m: float) -> List[str]:
+    """Flags about the scale. Review #25 (30 Oct): with the camera-height cue alone, H_cap x scale equals the assumed
+    camera height by construction, so a range check on it cannot fire; say the scale rests on a prior instead, and
+    gate (align/stage.py gate_reasons) only when a second cue exists."""
+    flags: List[str] = []
+    others = [c for c in cues if c.name != "camera_height"]
+    if not others:
+        flags.append(f"scale rests on one prior: the camera is assumed {h_cap_m:.2f} m above the floor "
+                     f"({cues[0].note if cues else 'no cue'}); no second cue checks it (give --measure, or run MoGe)")
+        if not (1.0 <= h_cap_m <= 1.8):
+            flags.append(f"H_cap is not plausible: {h_cap_m:.2f} m assumed camera height (check --height)")
+        return flags
+    if not (1.0 <= h_cap_m <= 1.8):
+        flags.append(f"H_cap x scale = {h_cap_m:.2f} m is outside 1.0-1.8 m: scale or floor error")
+    dropped = [c for c in cues if not c.used]
+    if dropped:
+        flags.append("scale cues disagree: " + "; ".join(f"{c.name} dropped ({c.note})" for c in dropped))
+    return flags
 
 
 def scale_interval(s: float, sigma_log: float) -> Dict[str, float]:

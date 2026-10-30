@@ -298,8 +298,10 @@ def evaluate(probe: Dict[str, Any], blur: Optional[Dict[str, Any]], expo: Option
     if probe["hdr"] != "none":
         cs.append(_check("hdr", WARN, probe["hdr"],
                          f"HDR transfer {probe['color_transfer']} ({probe['hdr'].upper()}); we tone-map to SDR",
-                         "Nothing needed. To avoid tone mapping, turn off HDR video "
-                         "(iPhone: Settings > Camera > Record Video > HDR Video)."))
+                         "For the real take, turn HDR Video off (iPhone: Settings > Camera > Record Video > "
+                         "HDR Video) and reshoot. Our tone mapping was tested only on SDR clips mapped into HLG, "
+                         "not on real iPhone HDR; if you must use this clip, look at a few frames in "
+                         "10_frames/images before training."))
     else:
         cs.append(_check("hdr", PASS, "none", "SDR"))
 

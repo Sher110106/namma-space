@@ -18,6 +18,6 @@
     {"id": "viewer.fps_mean", "path": "viewer.devices[*].fps_mean", "op": ">=", "value": 55, "modes": ["any"], "ref": "test H2: >= 55 fps"},
     {"id": "viewer.p95_ms", "path": "viewer.devices[*].p95_ms", "op": "<=", "value": 20, "modes": ["any"], "ref": "test H2: p95 frame time <= 20 ms"},
     {"id": "viewer.first_frame_s", "path": "viewer.devices[*].first_frame_s", "op": "<=", "value": 5, "modes": ["any"], "ref": "test H1: first frame <= 5 s from localhost"},
-    {"id": "timings.total", "path": "timings.total", "op": "<=", "value": 6000, "modes": ["full"], "ref": "test 0.7: unattended rehearsal <= 100 min [E] (seconds)"}
+    {"id": "timings.total", "path": "timings.total", "op": "<=", "value": 6000, "modes": ["full"], "ref": "test 0.7: rehearsal run <= 100 min [E] (seconds)"}
   ]
 }

@@ -1,0 +1,9 @@
+[
+  {"id": "green-sofa", "name": "Green sofa", "aliases": ["sofa", "couch", "lime sofa", "seating"], "kind": "item", "position": [0.792, 0.417, 0.025], "yaw_deg": -179, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "colourful-painting", "name": "Colourful painting", "aliases": ["painting", "picture", "artwork", "wall art"], "kind": "item", "position": [2.174, 1.454, 0.769], "yaw_deg": -87.3, "radius_m": 0.6, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "wall-tv", "name": "Wall TV", "aliases": ["tv", "television", "screen", "display", "monitor"], "kind": "item", "position": [-2.49, 1.654, 0.327], "yaw_deg": 90, "radius_m": 1.2, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "fire-extinguisher", "name": "Fire extinguisher", "aliases": ["extinguisher", "fire safety", "red extinguisher"], "kind": "item", "position": [2.069, 1.045, -0.948], "yaw_deg": -82.9, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "door", "name": "Door", "aliases": ["exit", "entrance", "white door", "exit door"], "kind": "item", "position": [1.299, 1.293, -1.74], "yaw_deg": 0, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "sink", "name": "Sink", "aliases": ["wash basin", "basin", "tap", "steel sink"], "kind": "item", "position": [-0.005, 0.702, -1.537], "yaw_deg": 55.9, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"},
+  {"id": "vr-equipment-cabinet", "name": "VR equipment cabinet", "aliases": ["vr cabinet", "equipment", "sideboard", "cupboard"], "kind": "item", "position": [-2.298, 0.77, -0.548], "yaw_deg": 55.2, "radius_m": 0.4, "notes": "placed by hand with the place editor (build team), 30 Oct"}
+]

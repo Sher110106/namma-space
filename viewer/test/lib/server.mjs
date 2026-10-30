@@ -14,11 +14,17 @@ const MIME = {
  * opts.cors: send access-control-allow-origin: * (and expose range headers).
  */
 export function startServer(mounts, opts = {}) {
-  const log = [];
-  const server = http.createServer((req, res) => {
+  const log = [], counts = new Map();
+  const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
     let p = decodeURIComponent(url.pathname);
-    log.push({ path: p, range: req.headers.range || null, t: Date.now() });
+    const nth = (counts.get(p) || 0) + 1; counts.set(p, nth);
+    log.push({ path: p, range: req.headers.range || null, t: Date.now(), nth });
+    // test hooks: opts.delay(path) -> ms to wait before answering; opts.fail(path, nth) -> null | HTTP status | "reset" | {dropAfter: bytes}
+    if (opts.delay) { const ms = opts.delay(p, nth); if (ms) await new Promise((r) => setTimeout(r, ms)); }
+    const failure = opts.fail ? opts.fail(p, nth) : null;
+    if (failure === "reset") return req.socket.destroy();
+    if (typeof failure === "number") { res.writeHead(failure, { "cache-control": "no-store" }); return res.end("injected failure"); }
     let file = null;
     for (const m of mounts) {
       if (p.startsWith(m.prefix)) {
@@ -46,6 +52,11 @@ export function startServer(mounts, opts = {}) {
     headers["content-length"] = end - start + 1;
     res.writeHead(code, headers);
     if (req.method === "HEAD") return res.end();
+    if (failure && failure.dropAfter) {                      // send part of the body, then cut the connection
+      const part = Math.min(failure.dropAfter, end - start + 1);
+      res.write(fs.readFileSync(file).subarray(start, start + part), () => setTimeout(() => req.socket.destroy(), 20));
+      return;
+    }
     const stream = fs.createReadStream(file, { start, end, highWaterMark: 64 * 1024 });
     if (!opts.bytesPerSec || st.size < 1_000_000) return stream.pipe(res);
     // throttle: send in 64 KB chunks paced to bytesPerSec (small files pass at full speed)

@@ -30,6 +30,38 @@ async function search(pg, text, { enter = true } = {}) {
   return ids;
 }
 
+
+// Search cases for the test fixture's own places (the names are fixed there).
+const FIXTURE_SEARCH_CASES = [["wall display", "wall-display", "name"], ["tv", "wall-display", "alias"], ["monitor", "wall-display", "alias"], ["sideboard", "coffee-counter", "alias"], ["entrance", "door", "alias"],
+  ["meting table", "meeting-table", "typo: deleted letter"], ["cofee counter", "coffee-counter", "typo: deleted letter"], ["windws", "window-blinds", "typo (alias)"], ["armchiar", "armchair", "typo: swap"], ["forest pictur", "forest-picture", "partial"], ["foerst picture", "forest-picture", "typo: swap"]];
+
+/** Search cases built from any scene's places: the name, one alias that no other place shares, and one-letter typos of a long, unshared word of the name. */
+function searchCasesFor(places) {
+  const words = (str) => String(str).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const wordsOf = (p) => [...words(p.name), ...p.aliases.flatMap(words)];
+  const lev = (a, b) => { const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]); for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
+  // a word is unshared when no other place has a word that is close to it (one edit), starts with it, or contains it
+  const unshared = (w, p) => places.filter((q) => q.id !== p.id).every((q) => wordsOf(q).every((x) => lev(x, w) > 1 && !x.startsWith(w) && !w.startsWith(x) && !x.includes(w)));
+  const cases = [];
+  for (const p of places) {
+    cases.push([p.name.toLowerCase(), p.id, "name"]);
+    const al = p.aliases.find((a) => words(a).length && words(a).every((w) => unshared(w, p)));
+    if (al) cases.push([al.toLowerCase(), p.id, "alias"]);
+  }
+  let k = 0;
+  for (const p of places) {
+    const w = words(p.name).filter((x) => x.length >= 5 && unshared(x, p)).sort((a, b) => b.length - a.length)[0];
+    if (!w) continue;
+    const swap = k % 2 === 1, i = 2;
+    const typo = swap ? w.slice(0, i) + w[i + 1] + w[i] + w.slice(i + 2) : w.slice(0, i) + w.slice(i + 1);
+    if (typo === w || !unshared(typo, p)) continue;
+    cases.push([p.name.toLowerCase().replace(w, typo), p.id, swap ? "typo: swap" : "typo: deleted letter"]);
+    k++;
+  }
+  return cases;
+}
+
 export function registerGuideTests(T) {
   // ------------------------------------------------------------------------------------------------------ R0: Node unit tests
   T("R0", "route, search and follow logic (Node): routes on honka and 5 synthetic grids, A* vs Dijkstra, typo search, follow simulation", async () => {
@@ -105,8 +137,8 @@ export function registerGuideTests(T) {
     return withBrowser(c.web, async (ctx) => {
       await ready(ctx);
       if (!(await ctx.pg.eval("__ns.S.guide.places.length"))) return { pass: null, value: "not run: scene has no places" };
-      const cases = [["wall display", "wall-display", "name"], ["tv", "wall-display", "alias"], ["monitor", "wall-display", "alias"], ["sideboard", "coffee-counter", "alias"], ["entrance", "door", "alias"],
-        ["meting table", "meeting-table", "typo: deleted letter"], ["cofee counter", "coffee-counter", "typo: deleted letter"], ["windws", "window-blinds", "typo (alias)"], ["armchiar", "armchair", "typo: swap"], ["forest pictur", "forest-picture", "partial"], ["foerst picture", "forest-picture", "typo: swap"]];
+      const places = await ctx.pg.eval("__ns.S.guide.places.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases || [] }))");
+      const cases = places.some((p) => p.id === "wall-display") ? FIXTURE_SEARCH_CASES : searchCasesFor(places);
       const rows = [];
       for (const [q, want, kind] of cases) {
         await ctx.pg.eval("__ns.S.guide.clearSelection()");
@@ -154,7 +186,9 @@ export function registerGuideTests(T) {
       const end = await pose(ctx.pg), pl = places.find((p) => p.id === best.id);
       const dEnd = Math.hypot(end.x - routeInfo.stand.x, end.z - routeInfo.stand.z);
       const standD = Math.hypot(routeInfo.stand.x - pl.position[0], routeInfo.stand.z - pl.position[2]);
-      const wantYaw = (Math.atan2(-(pl.position[0] - end.x), -(pl.position[2] - end.z)) * 180) / Math.PI;
+      // follow turns to face the place as seen from the stand spot; the player stops up to 0.25 m from that spot, which at a stand-back of
+      // 1.8 m alone is 8 degrees seen from the place, so the yaw is judged against the stand spot's direction
+      const wantYaw = (Math.atan2(-(pl.position[0] - routeInfo.stand.x), -(pl.position[2] - routeInfo.stand.z)) * 180) / Math.PI;
       const yawErr = angDiff(end.yawDeg, wantYaw);
       const toast = await ctx.pg.eval("document.getElementById('toast').textContent");
       await ctx.pg.screenshot(path.join(c.shots, "r4_arrived.png"));
@@ -167,7 +201,7 @@ export function registerGuideTests(T) {
       const after = await ctx.pg.eval("__ns.S.guide.following");
       const speed = routeInfo.len / secs;
       const pass = !!started && bad === 0 && dEnd < 0.4 && (standD < 0.3 || yawErr < 6) && speed > 0.8 && speed < 1.6 && mid === true && after === false && /Arrived/.test(toast);
-      return { pass, value: `route ${r1(routeInfo.len)} m (${r1(routeInfo.sec)} s at 1.4 m/s) to "${best.id}"; walked it in ${r1(secs)} s (mean ${r1(speed * 10) / 10} m/s incl. start turn); ${bad} of ${n} samples off walkable cells; ended ${r3(dEnd)} m from the stand spot, ${r1(yawErr)} deg off facing the place; toast "${toast}"; W key stopped follow: ${mid === true && after === false}`,
+      return { pass, value: `route ${r1(routeInfo.len)} m (${r1(routeInfo.sec)} s at 1.4 m/s) to "${best.id}"; walked it in ${r1(secs)} s (mean ${r1(speed * 10) / 10} m/s incl. start turn); ${bad} of ${n} samples off walkable cells; ended ${r3(dEnd)} m from the stand spot, ${r1(yawErr)} deg off the direction to the place from the stand spot; toast "${toast}"; W key stopped follow: ${mid === true && after === false}`,
         metrics: { place: best.id, route_m: r3(routeInfo.len), seconds: r1(secs), mean_mps: r3(speed), samples: n, blocked_samples: bad, max_off_route_m: r3(maxOff), end_error_m: r3(dEnd), yaw_error_deg: r1(yawErr) } };
     });
   });
@@ -194,9 +228,28 @@ export function registerGuideTests(T) {
       await sleep(900);
       const re = await ctx.pg.eval(`(() => { const G = __ns.S.guide, w = __ns.walker; return {changed: G.route !== window.__r0, start: G.route.points[0], ok: G.route.ok, px: w.x, pz: w.z}; })()`);
       const startErr = Math.hypot(re.start[0] - re.px, re.start[1] - re.pz);
-      // no path: wall off the middle of the floor, ask for a place beyond it
-      const blocked = await ctx.pg.eval(`(() => { const g = __ns.grid; const d = new Uint8Array(g.data); for (let i = 0; i < g.h; i++) for (let j = 0; j < g.w; j++) { const x = g.ox + (j + .5) * g.cell; if (x > -0.5 && x < 2.9) d[i * g.w + j] = 0; } g.data = d;
-        const G = __ns.S.guide; __ns.walker.teleport(-3.5, 0.8); G.select('coffee-counter'); G.routeOn = false; G.toggleRoute(); return {ok: G.route.ok, reason: G.route.reason, card: document.getElementById('pl-info').textContent, bad: document.getElementById('pl-info').classList.contains('bad'), mesh: !!G.mesh, follow_btn_hidden: document.getElementById('pl-follow').hidden}; })()`);
+      // no path: wall off the floor, ask for a place beyond it. The fixture keeps its fixed numbers. Any other scene: the first place keeps
+      // an island of cells within 0.45 m of its stand spot, every other cell within 2.2 m (plus the stand distance) of the place is blocked,
+      // so the nearest cell the player can reach is more than 1.5 m farther from the place than the island (the viewer would otherwise
+      // route to a "closest spot" within 1.5 m). The player stands on the walkable cell farthest from the place.
+      const blocked = await ctx.pg.eval(`(() => { const g = __ns.grid, G = __ns.S.guide; const d = new Uint8Array(g.data);
+        const fixture = G.places.some((p) => p.id === "coffee-counter");
+        let id = "coffee-counter", from = [-3.5, 0.8];
+        if (fixture) {
+          for (let i = 0; i < g.h; i++) for (let j = 0; j < g.w; j++) { const x = g.ox + (j + .5) * g.cell; if (x > -0.5 && x < 2.9) d[i * g.w + j] = 0; }
+        } else {
+          const place = G.places[0], st = G.standFor(place); if (!st) return { skip: "no stand spot for " + place.id };
+          id = place.id; let far = -1; from = null; const R = st.d + 2.2;
+          for (let i = 0; i < g.h; i++) for (let j = 0; j < g.w; j++) {
+            const x = g.ox + (j + .5) * g.cell, z = g.oz + (i + .5) * g.cell, rp = Math.hypot(x - place.position[0], z - place.position[2]), rs = Math.hypot(x - st.x, z - st.z);
+            if (rs <= 0.45) continue;
+            if (rp < R) d[i * g.w + j] = 0; else if (g.data[i * g.w + j] === 255 && rp > far) { far = rp; from = [x, z]; }
+          }
+          if (!from) return { skip: "no walkable cell outside the blocked disc" };
+        }
+        g.data = d;
+        __ns.walker.teleport(from[0], from[1]); G.select(id); G.routeOn = false; G.toggleRoute(); return {ok: G.route.ok, reason: G.route.reason, id, card: document.getElementById('pl-info').textContent, bad: document.getElementById('pl-info').classList.contains('bad'), mesh: !!G.mesh, follow_btn_hidden: document.getElementById('pl-follow').hidden}; })()`);
+      if (blocked.skip) return { pass: false, value: `walled-off floor test could not be set up: ${blocked.skip}` };
       const pass = same === true && re.changed === true && re.ok && startErr < 0.15 && off && blocked.ok === false && /No walking route/.test(blocked.reason || "") && /No walking route/.test(blocked.card) && blocked.bad && !blocked.mesh && blocked.follow_btn_hidden;
       return { pass, value: `0.3 m step along the route: route kept (${same}); ${off ? r1(off.dmin * 10) / 10 : "?"} m off the path: re-planned from the new spot (start error ${r3(startErr)} m); walled-off floor: "${blocked.reason}"`, metrics: { same_route_after_small_move: same, replanned_after_off_path: re.changed, start_error_m: r3(startErr), off_path_m: off && r3(off.dmin), no_path: blocked } };
     });
@@ -230,7 +283,9 @@ export function registerGuideTests(T) {
       const A = floorPoint(p, ...pxA), B = floorPoint(p, ...pxB);
       const want = Math.hypot(A[0] - B[0], A[2] - B[2]), got = m.res.d;
       const wantErr = (want * sc.pct_68) / 100;
-      const labelOk = /m/.test(m.msg) && (sc.pct_68 > 0 ? m.msg.includes(`± ${wantErr.toFixed(2)} m`) && /68%/.test(m.msg) : /not checked/.test(m.msg));
+      // finding 29: the range is an estimate from a prior unless scene.json says it was checked
+      const labelOk = /m/.test(m.msg) && (sc.checked_against ? /checked/i.test(m.msg) && !/±/.test(m.msg)
+        : sc.pct_68 > 0 ? m.msg.includes(`± ${wantErr.toFixed(2)} m`) && /68%/.test(m.msg) && /estimate/i.test(m.msg) && !/measured error we|from the scale check/i.test(m.msg) : /not checked/.test(m.msg));
       await ctx.pg.screenshot(path.join(c.shots, "r6_measure.png"));
       // (b) splat surfaces: same clicks with the raycast on
       await ctx.pg.eval("__ns.S.guide.useSplats = true");

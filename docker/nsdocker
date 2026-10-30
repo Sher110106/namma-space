@@ -1,0 +1,50 @@
+#!/bin/bash
+# Run one of our containers under the host rules (CONTRACTS 2.15).
+# Usage: nsdocker [--gpu] NAME IMAGE CMD...
+#   Mounts the namma-space root at /w (code at /w/repo, or $NS_WORKDIR), runs as the calling user,
+#   caps memory at 20 GB and CPUs at 24, allows at most 3 ns-* containers at once,
+#   refuses to start below 15 GB free disk (exit 20), and with --gpu waits for one of
+#   two GPU slot locks plus at least 12 GB free GPU memory.
+# Install on a Linux host with Docker and the NVIDIA container toolkit: docker/install_host.sh (test/README.md).
+# Environment:
+#   NS_ROOT     namma-space root on the host (default: the folder above the bin/ this script is installed in)
+#   NS_WORKDIR  code directory inside the container (default /w/repo; ns run --repo-dir sets /w/<frozen copy>)
+#   NS_MIN_FREE_GB (15), NS_MAX_CONTAINERS (3), NS_GPU_MIN_FREE_MB (12000), NS_MEMORY (20g), NS_CPUS (24)
+set -u
+HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+NS=${NS_ROOT:-$(dirname "$HERE")}
+WORKDIR=${NS_WORKDIR:-/w/repo}
+MIN_FREE_GB=${NS_MIN_FREE_GB:-15}
+MAX_CONTAINERS=${NS_MAX_CONTAINERS:-3}
+GPU_MIN_FREE_MB=${NS_GPU_MIN_FREE_MB:-12000}
+GPU=0
+if [ "${1:-}" = "--gpu" ]; then GPU=1; shift; fi
+if [ $# -lt 3 ]; then echo "usage: nsdocker [--gpu] NAME IMAGE CMD..." >&2; exit 2; fi
+NAME=$1; IMAGE=$2; shift 2
+case "$NAME" in ns-*) ;; *) NAME="ns-$NAME" ;; esac
+if [ ! -d "$NS/locks" ]; then echo "nsdocker: $NS/locks missing; is NS_ROOT right? (docker/install_host.sh)" >&2; exit 20; fi
+avail=$(df --output=avail -BG "$NS" | tail -1 | tr -dc 0-9)
+if [ "$avail" -lt "$MIN_FREE_GB" ]; then echo "nsdocker: only ${avail}G free (<${MIN_FREE_GB}G); refusing" >&2; exit 20; fi
+while [ "$(docker ps --format "{{.Names}}" | grep -c "^ns-")" -ge "$MAX_CONTAINERS" ]; do sleep 10; done
+COMMON=(--rm --name "$NAME" --user "$(id -u):$(id -g)" -e HOME=/tmp -e XDG_CACHE_HOME=/w/cache \
+  --memory "${NS_MEMORY:-20g}" --memory-swap "${NS_MEMORY:-20g}" --cpus "${NS_CPUS:-24}" --shm-size 8g \
+  -v "$NS":/w -w "$WORKDIR")
+if [ "$GPU" = 1 ]; then
+  while true; do
+    for s in 0 1; do
+      exec 9>"$NS/locks/gpu.$s"
+      if flock -n 9; then
+        free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
+        if [ "$free" -ge "$GPU_MIN_FREE_MB" ]; then
+          docker run "${COMMON[@]}" --gpus all "$IMAGE" "$@"; rc=$?
+          flock -u 9; exec 9>&-; exit $rc
+        fi
+        flock -u 9
+      fi
+      exec 9>&-
+    done
+    sleep 15
+  done
+else
+  docker run "${COMMON[@]}" "$IMAGE" "$@"
+fi

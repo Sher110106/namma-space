@@ -2,6 +2,7 @@
 // Drawing: the route is a ribbon mesh on the floor (drawn after the splats, no depth test); pins, labels and the measure line are a 2D overlay canvas.
 import * as THREE from "three";
 import { routeToPlace, standSpot, standBackFor, followStep, projectOnPolyline, arclengths, pointAtS, polylineLength } from "./nav.js";
+import { scaleInfo } from "./scene.js";
 import { readPlaces, searchPlaces, normalisePlace, uniqueIds, placesToJson, slug, yawToward, pitchToward, DEFAULT_RADIUS } from "./places.js";
 
 const $ = (id) => document.getElementById(id);
@@ -461,8 +462,9 @@ export class Guide {
   }
   measureResult() {
     const { a, b } = this.meas, d = Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]);
-    const pct = this.S.data.scale?.pct_68 || 0, pm = pct > 0 ? `± ${(d * pct / 100).toFixed(2)} m (scale ±${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%)` : "scale not checked";
-    return { d, pct, pm, sources: [a.source, b.source], err: pct > 0 ? (d * pct) / 100 : null };
+    const si = scaleInfo(this.S.data.scale), pct = si.pct;
+    const pm = pct > 0 ? `± ${(d * pct / 100).toFixed(2)} m (scale ${si.short})` : si.checked ? si.short : "scale not checked";
+    return { d, pct, pm, checked: si.checked, sources: [a.source, b.source], err: pct > 0 ? (d * pct) / 100 : null };
   }
 
   // ------------------------------------------------------------------------------------------------------------ tools: banner, add place, measure
@@ -496,7 +498,7 @@ export class Guide {
       else if (!b) msg.innerHTML = "<b>Measure.</b> Click the second point.";
       else {
         const r = this.measureResult(), sc = this.S.data.scale || {};
-        msg.innerHTML = `<b>${r.d.toFixed(2)} m</b> ${r.pct > 0 ? `<span class="dim">± ${(r.err).toFixed(2)} m</span>` : ""}<br><span class="dim small">${r.pct > 0 ? `68% interval from the scale check: ±${r.pct < 10 ? r.pct.toFixed(1) : Math.round(r.pct)}%` : "The scale of this scene is not checked"}${sc.method ? ` (${escapeHtml(sc.method)})` : ""}. Points on ${r.sources.includes("floor") ? "splats or the floor plane" : "splat surfaces"}. Click again to start over.</span>`;
+        msg.innerHTML = `<b>${r.d.toFixed(2)} m</b> ${r.pct > 0 ? `<span class="dim">± ${(r.err).toFixed(2)} m</span>` : ""}<br><span class="dim small">${escapeHtml(scaleInfo(sc).long)}${!sc.checked_against && sc.method ? ` Method: ${escapeHtml(sc.method)}.` : ""} Points on ${r.sources.includes("floor") ? "splats or the floor plane" : "splat surfaces"}. Click again to start over.</span>`;
       }
     }
   }

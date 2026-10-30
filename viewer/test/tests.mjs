@@ -382,32 +382,31 @@ T("X7", "minimap: view cone and arrow drawn; clicking teleports to the nearest w
   });
 });
 
-T("X8", "HD button swaps in splat_hd (a scene without one gets the SD file standing in for HD, to test the mechanism)", async (c) => {
-  const { scene, dir } = sceneJson(c.web, c.scene);
-  let web = c.web, tmp = null, stand = false;
-  if (!scene.splats.hd) {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ns-x8-"));
-    for (const f of ["index.html", "js", "css", "vendor"]) fs.cpSync(path.join(c.web, f), path.join(tmp, f), { recursive: true });
-    fs.cpSync(path.join(c.web, "scenes"), path.join(tmp, "scenes"), { recursive: true });
-    const sdir = path.join(tmp, "scenes", scene.name);
-    fs.copyFileSync(path.join(sdir, scene.splats.sd.url), path.join(sdir, "splat_hd.spz"));
-    const j = JSON.parse(fs.readFileSync(path.join(sdir, "scene.json"), "utf8"));
-    j.splats.hd = { ...j.splats.sd, url: "splat_hd.spz" };
-    fs.writeFileSync(path.join(sdir, "scene.json"), JSON.stringify(j));
-    web = tmp; stand = true;
-  }
-  try {
-    return await withBrowser(web, async (ctx) => {
-      await openViewer(ctx, "", { start: true }); await waitFullLoad(ctx.pg);
-      const shown = await ctx.pg.eval("!document.getElementById('b-hd').hidden");
-      await ctx.pg.eval("document.getElementById('b-hd').click()");
-      await ctx.pg.waitFor("__ns.S.active.userData.kind === 'hd'", 60000, 200);
-      const n = await ctx.pg.eval("__ns.S.splatCount");
-      await ctx.pg.eval("document.getElementById('b-hd').click()");
-      await ctx.pg.waitFor("__ns.S.active.userData.kind === 'sd'", 30000, 200);
-      return { pass: shown && n > 0, value: `HD button shown ${shown}; HD active with ${n} splats, then back to SD${stand ? " (mechanism test, SD file as HD)" : ""}`, metrics: { stand_in: stand } };
-    });
-  } finally { if (tmp) fs.rmSync(tmp, { recursive: true, force: true }); }
+T("X8", "HD button swaps in splat_hd (a scene without one gets the SD file standing in for HD, to test the mechanism); no button when HD equals SD", async (c) => {
+  const { scene, name } = sceneJson(c.web, c.scene);
+  const hdOf = (j) => ({ ...j.splats.sd, url: j.splats.sd.url + "?as=hd", sh_degree: 3, bytes: j.splats.sd.bytes + 1 });      // another URL for the same bytes: a separate download, as a real HD file would be; one byte more in the entry, so that it differs from SD even when SD is already SH3
+  const withScene = async (edit, fn) => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ns-x8-"));
+    const j = JSON.parse(JSON.stringify(scene)); edit(j);
+    fs.writeFileSync(path.join(tmp, "scene.json"), JSON.stringify(j));
+    try { return await withBrowser(c.web, fn, { server: { extraMounts: [{ prefix: `/scenes/${name}/`, dir: tmp }] } }); } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  };
+  const stand = !scene.splats.hd;
+  const a = await withScene((j) => { if (!j.splats.hd || j.splats.hd.bytes === j.splats.sd.bytes) j.splats.hd = hdOf(j); }, async (ctx) => {
+    await openViewer(ctx, "", { start: true }); await waitFullLoad(ctx.pg);
+    const shown = await ctx.pg.eval("!document.getElementById('b-hd').hidden");
+    await ctx.pg.eval("document.getElementById('b-hd').click()");
+    await ctx.pg.waitFor("__ns.S.active.userData.kind === 'hd'", 60000, 200);
+    const n = await ctx.pg.eval("__ns.S.splatCount");
+    await ctx.pg.eval("document.getElementById('b-hd').click()");
+    await ctx.pg.waitFor("__ns.S.active.userData.kind === 'sd'", 30000, 200);
+    return { shown, n };
+  });
+  const b = await withScene((j) => { j.splats.hd = { ...j.splats.sd, url: "splat_hd_copy.spz" }; }, async (ctx) => {       // identical size, count and SH degree: an old bundle with a copy of SD
+    await openViewer(ctx, "", { start: true }); await waitFullLoad(ctx.pg);
+    return ctx.pg.eval("({hidden: document.getElementById('b-hd').hidden, hasHd: !!__ns.S.data.splats.hd})");
+  });
+  return { pass: a.shown && a.n > 0 && b.hidden && b.hasHd, value: `HD button shown ${a.shown}; HD active with ${a.n} splats, then back to SD${stand ? " (mechanism test, SD file as HD)" : ""}; an HD entry equal to SD (same bytes, count, SH degree): button hidden ${b.hidden}`, metrics: { stand_in: stand, equal_hd_hidden: b.hidden } };
 });
 
 T("X9", "?scene=<name> loads that scene; an unknown scene shows the error card instead of a blank page", async (c) => {
@@ -464,6 +463,131 @@ T("X12", "L copies a spot link; opening it puts the player at the same pose", as
     const p = await pg2.eval("__ns.pose()");
     await pg2.close();
     return { pass: Math.abs(p.yawDeg - 77) < 0.1 && Math.abs(p.pitchDeg + 8) < 0.1, value: `${link.replace(/^https?:\/\/[^/]+/, "")} -> yaw ${p.yawDeg.toFixed(1)}, pitch ${p.pitchDeg.toFixed(1)}` };
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------- review fixes (30 Oct)
+// A page whose requestAnimationFrame never runs faster than `fps` (battery saver, vsync at half rate), with a stall switch that mimics a hidden tab.
+const CAP_SCRIPT = (fps) => `(() => { const raf = window.requestAnimationFrame.bind(window); let last = -1e9; window.__stallUntil = 0; const gap = ${1000 / fps};
+  window.requestAnimationFrame = (cb) => raf(() => { const now = performance.now(); const wait = Math.max(gap - (now - last), window.__stallUntil - now);
+    if (wait > 1) setTimeout(() => { last = performance.now(); cb(last); }, wait); else { last = now; cb(now); } }); })()`;
+
+T("X13", "frame rate capped at 30 fps (battery saver): the governor may try a step, sees no gain, and ends on standard; never on the preview", async (c) => {
+  return withBrowser(c.web, async (ctx) => {
+    await ctx.pg.send("Page.addScriptToEvaluateOnNewDocument", { source: CAP_SCRIPT(30) });
+    await openViewer(ctx, "?q=sd", { start: true }); await waitFullLoad(ctx.pg);
+    await sleep(13000);
+    let r;
+    for (let i = 0; i < 24; i++) {                                    // let a trial or a re-check that is in flight finish
+      r = await ctx.pg.eval("({hist: __ns.governor.history.map(h => h.step.name + ':' + h.kind), level: __ns.governor.level, trial: !!__ns.governor.trial || !!__ns.governor.verify, kind: __ns.S.active.userData.kind, n: __ns.S.splatCount, pr: __ns.S.pr, fps: __ns.S.stats.fps})");
+      if (!r.trial) break; await sleep(500);
+    }
+    const noPreview = !r.hist.some((h) => /^preview/.test(h));
+    const pass = r.fps > 24 && r.fps < 36 && noPreview && r.kind === "sd" && r.level === 0 && r.pr === 1;
+    return { pass, value: `capped at ${r.fps.toFixed(0)} fps; governor history [${r.hist.join(", ")}]; ends on ${r.kind} ${r.n} splats at pixel ratio ${r.pr}`, metrics: r };
+  });
+});
+
+T("X14", "a failed or dropped SD download keeps the preview and shows a toast, not the error card; one retry; the error card (with Reload) only when nothing renders", async (c) => {
+  const { name, dir, scene } = sceneJson(c.web, c.scene);
+  if (!scene.splats.preview) return { pass: null, value: "not run: scene has no preview file" };
+  const sd = (p) => /splat_sd\.spz$/.test(p);
+  const rows = [];
+  const scenario = async (label, server, { noPreview = false, expect }) => {
+    let tmp = null; const extraMounts = [];
+    if (noPreview) {
+      tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ns-x14-")); const j = JSON.parse(JSON.stringify(scene)); j.splats.preview = null;
+      fs.writeFileSync(path.join(tmp, "scene.json"), JSON.stringify(j)); extraMounts.push({ prefix: `/scenes/${name}/`, dir: tmp });
+    }
+    try {
+      await withBrowser(c.web, async (ctx) => {
+        await openViewer(ctx, "", { start: !noPreview });
+        const t0 = Date.now();
+        await ctx.pg.waitFor("__ns.log.some(l => /initialised, \\d+ splats/.test(l) && /splats active/.test(__ns.log.join('|'))) || __ns.log.some(l => /failed again/.test(l)) || __ns.error", 45000, 150);
+        await sleep(600);
+        const r = await ctx.pg.eval(`({err: __ns.error, card: !document.getElementById('errcard').hidden, reload: !!document.querySelector('#errcard button'), kind: __ns.S.active && __ns.S.active.userData.kind, toasts: __ns.toasts || [],
+          fullFailed: __ns.fullFailed === true, loaderHidden: document.getElementById('loader').hidden, full: __ns.S.fullLoaded === true, goDisabled: document.getElementById('s-go').disabled, started: !!__ns.S.started, n: __ns.S.splatCount})`);
+        let moved = null;
+        if (expect === "preview") { const p0 = await ctx.pg.eval("__ns.pose()"); await ctx.pg.key("KeyW"); await sleep(900); await ctx.pg.key("KeyW", false); const p1 = await ctx.pg.eval("__ns.pose()"); moved = Math.hypot(p1.x - p0.x, p1.z - p0.z); }
+        const reqs = ctx.srv.log.filter((l) => sd(l.path)).length;
+        rows.push({ label, ...r, moved, sd_requests: reqs, ok: expect === "preview" ? !r.card && r.err === null && r.kind === "preview" && r.toasts.some((t) => /did not load/.test(t)) && r.fullFailed && r.loaderHidden && moved > 0.3 && reqs >= 2
+          : expect === "sd" ? !r.card && r.kind === "sd" && r.full && reqs >= 2 : r.card && r.reload && r.kind !== "sd" });
+      }, { server: { ...server, extraMounts } });
+    } finally { if (tmp) fs.rmSync(tmp, { recursive: true, force: true }); }
+  };
+  await scenario("HTTP 500 on every SD request", { fail: (p) => (sd(p) ? 500 : null) }, { expect: "preview" });
+  await scenario("connection dropped after 1 MB, every time", { fail: (p) => (sd(p) ? { dropAfter: 1e6 } : null) }, { expect: "preview" });
+  await scenario("first SD request fails, the retry works", { fail: (p, nth) => (sd(p) && nth === 1 ? 500 : null) }, { expect: "sd" });
+  await scenario("no preview in the scene and SD fails: error card with a Reload button", { fail: (p) => (sd(p) ? 500 : null) }, { noPreview: true, expect: "card" });
+  return { pass: rows.every((r) => r.ok), value: rows.map((r) => `${r.label}: ${r.ok ? "ok" : "FAIL"} (${r.card ? "error card" : r.kind}, ${r.sd_requests} SD requests${r.moved != null ? `, walked ${r.moved.toFixed(1)} m` : ""})`).join("; "), metrics: { rows } };
+});
+
+T("X15", "hidden tab: coming back after a long pause does not step the quality down (visibilitychange resets the timer and the governor; no step is judged on the pause)", async (c) => {
+  return withBrowser(c.web, async (ctx) => {
+    await ctx.pg.send("Page.addScriptToEvaluateOnNewDocument", { source: CAP_SCRIPT(60) });
+    await openViewer(ctx, "?q=sd", { start: true }); await waitFullLoad(ctx.pg);
+    await sleep(3000);
+    const before = await ctx.pg.eval("__ns.governor.history.length");
+    // pause the frames for 6 s; the browser fires visibilitychange when the tab is shown again, just before the first frame
+    await ctx.pg.eval("window.__stallUntil = performance.now() + 6000; window.__ret = performance.now() + 5900; setTimeout(() => document.dispatchEvent(new Event('visibilitychange')), 5900); 1");
+    await sleep(5950);
+    const wired = await ctx.pg.eval("({last: __ns.S.stats.last, samples: __ns.governor.samples.length})");
+    await sleep(6500);
+    // A busy machine may step for its own reasons (the Mac is shared). What must not happen is a step judged on the pause: with the stale
+    // samples the first reading after the pause was a mean of well under 15 fps (0.1 to 3.5 fps in the review's runs).
+    const r = await ctx.pg.eval(`({n: __ns.governor.history.length, after: __ns.governor.history.filter(h => h.t > window.__ret).map(h => ({kind: h.kind, step: h.step.name, why: h.why, atS: +((h.t - window.__ret) / 1000).toFixed(1)})), level: __ns.governor.level, fps: __ns.S.stats.fps})`);
+    const bad = r.after.filter((h) => { const m = /mean ([\d.]+) fps/.exec(h.why); return m && +m[1] < 15; });
+    return { pass: wired.last === null && wired.samples === 0 && bad.length === 0, value: `after a 6 s pause: timer cleared ${wired.last === null}, governor samples ${wired.samples}; steps after the pause [${r.after.map((h) => `${h.step}:${h.kind} at +${h.atS} s`).join(", ") || "none"}], steps judged on the pause ${bad.length}; ${r.fps.toFixed(0)} fps`, metrics: { before, ...r, wired, bad } };
+  });
+});
+
+T("X16", "touchscreen laptop (touch support, mouse as main pointer) gets the desktop path: 'Click to start', pointer lock on a mouse click; a phone still gets 'Tap to start'", async (c) => {
+  const laptop = `(() => { Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 }); window.ontouchstart = null;
+    HTMLCanvasElement.prototype.requestPointerLock = function () { (window.__locks = window.__locks || []).push(1); return Promise.resolve(); }; })()`;
+  const lap = await withBrowser(c.web, async (ctx) => {
+    await ctx.pg.send("Page.addScriptToEvaluateOnNewDocument", { source: laptop });
+    await openViewer(ctx, "", {});
+    const sig = await ctx.pg.eval("({mtp: navigator.maxTouchPoints, ots: 'ontouchstart' in window, fine: matchMedia('(pointer: fine)').matches, touchDevice: __ns.S.touchDevice, label: document.getElementById('s-go').textContent, deskHint: !document.getElementById('hint-desk').hidden, measureBtn: !document.getElementById('b-measure').hidden})");
+    const b = await ctx.pg.eval("(() => { const r = document.getElementById('s-go').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()");
+    await ctx.pg.click(b[0], b[1]); await sleep(300);
+    const after = await ctx.pg.eval("({started: __ns.S.started, locks: (window.__locks || []).length, resumePill: !document.getElementById('paused').hidden})");
+    return { ...sig, ...after };
+  });
+  const phone = await withBrowser(c.web, async (ctx) => {
+    await openViewer(ctx, "", {});
+    return ctx.pg.eval("({touchDevice: __ns.S.touchDevice, label: document.getElementById('s-go').textContent, touchHint: !document.getElementById('hint-touch').hidden})");
+  }, { page: { width: 390, height: 844, mobile: true, touch: true, dpr: 2 }, chrome: { width: 390, height: 844 } });
+  const pass = lap.mtp === 5 && lap.ots && lap.fine && lap.touchDevice === false && lap.label === "Click to start" && lap.deskHint && !lap.measureBtn && lap.started && lap.locks === 1
+    && phone.touchDevice === true && phone.label === "Tap to start" && phone.touchHint;
+  return { pass, value: `laptop (maxTouchPoints ${lap.mtp}, pointer fine ${lap.fine}): touch path ${lap.touchDevice}, button "${lap.label}", pointer lock requests after a mouse click ${lap.locks}; phone: touch path ${phone.touchDevice}, button "${phone.label}"`, metrics: { lap, phone } };
+});
+
+T("X17", "progress before the 3 MB of JS arrives: the loading text is in the HTML, the bar moves, modulepreload links are present; real progress text follows", async (c) => {
+  const html = fs.readFileSync(path.join(c.web, "index.html"), "utf8");
+  const staticText = /<div id="loader-sub"[^>]*>([^<]+)</.exec(html)?.[1] || "";
+  const preloads = [...html.matchAll(/<link rel="modulepreload" href="([^"]+)"/g)].map((m) => m[1]);
+  return withBrowser(c.web, async (ctx) => {
+    await ctx.pg.goto(ctx.url(""));
+    await sleep(1200);
+    const early = await ctx.pg.eval("({sub: document.getElementById('loader-sub').textContent, shown: !document.getElementById('loader').hidden, wait: document.getElementById('loader').classList.contains('wait'), anim: getComputedStyle(document.querySelector('#bar-fill')).animationName, ns: !!window.__ns})");
+    await ctx.pg.waitFor("window.__ns && (window.__ns.ready || window.__ns.error)", 60000, 100);
+    await waitFullLoad(ctx.pg);
+    const late = await ctx.pg.eval("({wait: document.getElementById('loader').classList.contains('wait'), hidden: document.getElementById('loader').hidden, sub: document.getElementById('loader-sub').textContent})");
+    const pass = staticText.length > 20 && /viewer/i.test(staticText) && preloads.length >= 4 && early.shown && early.wait && early.anim === "ns-wait" && (late.hidden || !late.wait);
+    return { pass, value: `static text "${staticText}"; ${preloads.length} modulepreload links; at 1.2 s: loader shown ${early.shown}, bar animation ${early.anim}, text "${early.sub}"; after load: loader hidden ${late.hidden}`, metrics: { staticText, preloads, early, late } };
+  }, { server: { delay: (p) => (/spark\.module\.js$/.test(p) ? 2500 : 0) } });
+});
+
+T("X18", "clear colour: dark while loading (the first-frame probe needs it), then the scene's neutral colour; hidden HD when it equals SD", async (c) => {
+  const { scene } = sceneJson(c.web, c.scene);
+  return withBrowser(c.web, async (ctx) => {
+    await openViewer(ctx, "", { start: true }); await waitFullLoad(ctx.pg);
+    const r = await ctx.pg.eval(`(() => { const col = new __ns.THREE.Color(); __ns.renderer.getClearColor(col); const c = col.getRGB({}, __ns.THREE.SRGBColorSpace); return { rgb: [c.r, c.g, c.b].map(v => Math.round(v * 255)), ns: __ns.clearColor, hdHidden: document.getElementById('b-hd').hidden, hasHd: !!__ns.S.data.splats.hd }; })()`);
+    const want = scene.splats.render?.clear_color;
+    const sameAsSd = scene.splats.hd && scene.splats.sd && scene.splats.hd.bytes === scene.splats.sd.bytes && scene.splats.hd.count === scene.splats.sd.count;
+    const closeTo = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 1);
+    const pass = (want ? closeTo(r.rgb, want) : closeTo(r.rgb, [60, 58, 55])) && r.rgb.reduce((a, b) => a + b) > 3 * 30 && (!sameAsSd || r.hdHidden) && (r.hasHd || r.hdHidden);
+    return { pass, value: `clear colour after the first splat frame ${JSON.stringify(r.rgb)} (scene.json ${want ? JSON.stringify(want) : "has none, default grey expected"}); HD button hidden ${r.hdHidden} (scene has HD ${r.hasHd}${sameAsSd ? ", identical to SD" : ""})`, metrics: r };
   });
 });
 

@@ -122,3 +122,112 @@ Real align (W2) on the same SfM (`rh-honka30r`, `--from align --to align`): 273 
 - **Rescale** now reaches the grid and the bundle: `rescale.py` writes the user scale into `export.json T_final`
   (`T_final_export` keeps the export stage's own) and scales the held-out and parity poses. `ns rescale --factor K`
   multiplies; `--scale K` sets the total factor (1.0 = automatic).
+
+## Review fixes 30 Oct (pipeline fixer; findings in namma-space-work/review/FINDINGS_pipeline.md)
+
+A first fixer started these and was cut off at about 15:50; a second one checked its work, ran its tests and
+finished the rest. Per finding:
+
+- **#9 camera-path filter** (fixed). `pipeline/sfm/sanity.py` measures steps against capture time and judges each
+  stretch by the local path, not by its length; `sfm/stage.py` passes `t` from frames.json. Scored on the saved
+  models against MuSHRoom poses with the new `pipeline/sfm/sanity_gt.py`; tables in pipeline/sfm/NOTES.md. On the
+  models that were chosen: rh-phone C went from 31 dropped (23 of them correct) and 16 wrong kept to 24 dropped
+  (0 correct) and 0 wrong kept; rh-honka B from 18 (4 correct) and 1 wrong kept to 15 (0) and 0; rh-vrroom had no
+  wrong cameras and nothing is dropped either way. Unit tests: test_sanity.py (14 pass).
+- **#4/#10 training time** (fixed). The bench at 1919x1278 projects 64.4 min per 30k steps (1600 px: 49.2 min), under
+  root's 75-min bar, so frames stay at up to 1920 px. Defaults: r0 only (`--variants r0,r1` for both), 150 min per
+  variant, runner train limit 330 min. pipeline/train/NOTES.md "1920 px timing". Tests: test/unit/train (27 pass in
+  the container).
+- **Root decision 3, frozen code** (done). `ns run --repo-dir repo-room` copies the tree to `<root>/repo-room` (an
+  older copy is moved to `.old-<time>`, never deleted) and the runner, the wrapper and every container use it
+  (`/w/repo-room`); `--no-sync` reuses it; `ns rescale` reuses the copy a run was built from (run.json `repo`).
+  Test: test/e2e/test_frozen_repo.py (stub stages in real containers, passes). The fix-honka and fix-vrroom rebuilds
+  ran from `repo-fixrun`; `docker inspect` showed the container's working dir as `/w/repo-fixrun`.
+- **#6/#23 Mac disk** (fixed). bundle, verify and report stop with exit 20 below `NS_MAC_MIN_FREE_GB` (1.5 GB) and say
+  what to do; nothing on tyrone is lost. `ns run` with a Mac video uploads it to tyrone's `inbox/` and links it into
+  the run; `--move` deletes the Mac copy after the SHA-256 on both sides match; a half-done upload is finished, not
+  refused. Tests: test_ns_cli.py `test_mac_steps_refuse_when_the_disk_is_nearly_full`; test_remote.py
+  `test_mac_video_goes_to_the_inbox_move_deletes_it_and_package_on_host_places_it` (passes against tyrone).
+- **#7/#14/#26 inputs used** (fixed in code; uploading the room's own files stays a manual step). `ns package` reads
+  meta.json `files[]` (now with `on_host` and `mac_path`) for the run and its take B. With `--with-inputs` it copies
+  takes still on the Mac (if the disk allows), the `--sketch` photo(s) and meta.json into `04_Inputs_Used/`, writes
+  `INPUTS.txt` (size, status, place, SHA-256) and lists every input it could not copy with its size and place.
+  `--on-host` writes the package on tyrone (`runs/<name>/package/`), with the takes hard-linked from the inbox, and
+  writes MANIFEST.txt there. Tests: two in test_ns_cli.py, one in test_remote.py (all pass).
+- **#13 setup** (fixed for our part). `docker/nsdocker` (root and code folder from `NS_ROOT`/`NS_WORKDIR`),
+  `docker/install_host.sh`, `docker/fetch_cache.sh` (hash check ran OK on tyrone's cache); `ns` passes `--ns-root`
+  so `NS_REMOTE_ROOT` reaches the runner; `ns doctor` honours `NS_CHROME`. install_host.sh plus the wrapper were run
+  in a scratch root on tyrone and started a container there. Setup steps: test/README.md "What you need".
+  The root README is not ours.
+- **#27, #30, #35 test/README claims** (fixed). The 4K sentence now says what was tested (ingest on synthetic HLG
+  clips, SfM at 1920 px, a 9k-step training bench) and that no 1920 px run has gone through export and verify;
+  vr_room is called a rehearsal room with three logged restarts, and test 0.7 is marked not passed as specified;
+  the table cites MuSHRoom supplementary Table 1 and says which code each column ran.
+- **#24 HDR message** (fixed). check_mac.py tells the user to turn HDR Video off and reshoot, and says the tone map
+  was tested only on SDR clips mapped into HLG.
+- **#25 scale gate** (fixed). With only the camera-height cue, align now says the scale rests on one prior and does
+  not pretend to check it; a typo in `--height` still gates; a second cue that disagrees gates
+  ("scale cues disagree"). Tests: test/unit/align/test_scale_honesty.py (in the 23 align tests, pass).
+- **#19/#38/#47 HD equal to SD** (fixed). Export writes no HD file when SD already holds every cleaned splat at SH3,
+  and drops an HD file that comes out byte-identical to SD; `export.json` says why in `hd_skipped`.
+- **#20/#43 spawn and spill** (fixed). Spawn, bookmarks and stop views take the source camera's pitch clamped to
+  -12..-5 deg instead of 0; the spawn is the well-seen deep view that stands far from the middle of the walkable area
+  and looks at it; walkable cells more than 0.15 m past the outer walls are cut unless within 0.35 x H_cap of the
+  capture path (the doorway), and only the part joined to the path is kept. fov 70 -> 60 is in viewer/tools/bundle.py
+  (viewer fixer). Bookmark names stay "View n": nothing can name them automatically.
+- **#39 eye stand-off** (fixed). The eye now stops 0.28 x H_cap (0.39 m at 1.4 m, at most 0.45 m) from splats at or
+  above 0.75 x H_cap; low furniture keeps 0.23 m, and cells within 0.25 m of the capture path ignore the stand-off so
+  doors stay open.
+- **#17/#42 minimap** (fixed). Splats down to opacity 0.05 are drawn (was 0.3), painting is limited to floor and
+  obstacle cells grown by 0.3 m, and bare walkable pixels get the median walkable colour. Grid tests: 49 pass.
+
+Test runs at the end: `./ns test e2e` 102 tests OK (14 skipped, the remote ones); with `NS_E2E_REMOTE=1
+NS_E2E_PREFIX=fix-e2e` all remote tests pass (two failed on the first try: an rsync exit 23 while other tools were
+writing files, now retried, and a newline bug in the on-host package script, fixed; both re-run and pass). Unit
+tests: sfm 56, train 27, align 23, export 22, grid 49 pass. ingest: 18 run in the container and 1 fails,
+`test_B1_sdr_1080p` fails (median match 8.56 against a bound of 6.0). pipeline/ingest/stage.py and that test are
+unchanged from HEAD, so this was not caused by these fixes; not investigated.
+
+### Rebuilds (30 Oct, 16:19-17:28)
+`./ns run --frames tyrone:<honka images> --name fix-honka ... --repo-dir repo-fixrun` (from scratch) and
+`./ns run --name fix-vrroom --from align --repo-dir repo-fixrun --no-sync` on a copy of rh-vrroom whose
+10_frames, 20_sfm and 30_undist are hard links (the new filter drops nothing on vr_room's models, so SfM did not need
+to run again; align re-ran for the #25 flag). The rh-* runs were not touched. Pulled with `./ns pull`, then
+`./ns bundle`, `verify`, `report` on the Mac. Places: `runs/fix-vrroom/places.json` is viewer/places/rh-vrroom.json
+unchanged (the camera fit between the two runs is exact); `runs/fix-honka/places.json` is viewer/places/rh-honka.json
+moved into the new frame, because the new align turned honka's frame by 180 deg about +Y (yaw from walls has two
+signs), scale x1.0098, tilt 1.3 deg, plus fix-honka's T_final floor shift of +0.028 m (fit on 313 shared cameras,
+median residual 1 mm; the transform is in runs/fix-honka/places_transform.json, the one-off scripts in /tmp/nsfix/scripts).
+
+| | rh-honka (old) | fix-honka | rh-vrroom (old) | fix-vrroom |
+|---|---|---|---|---|
+| Exit | 30 | 11 (SfM partial, 94.6%) | 0 | 0 |
+| SfM chosen, kept, filter drops | B, 317 of 335, 18 | B, 317 of 335, 18 (0 correct, 2 wrong kept) | D, 420 of 422, 0 | same SfM |
+| Up / scale error vs MuSHRoom (metric_check) | 2.0 deg / +3.26% | 1.31 deg / +4.29% | 1.85 deg / -3.1% | 1.85 deg / -3.1% |
+| Align gate | failed (up cues 6.2 deg apart) | passed; flag: scale rests on one prior | passed | passed; same flag |
+| Train (chosen) | r1 of r0,r1: 21.35 dB, SSIM 0.812, LPIPS 0.225 | r0: 21.51 dB, SSIM 0.822, LPIPS 0.220 | r0: 23.97 dB, 0.870, 0.245 | r0: 24.04 dB, 0.871, 0.241 |
+| Train time | 5,156 s (two variants) | 2,245 s | 2,749 s | 2,655 s |
+| SD / HD | SH3 16.1 MB / identical copy | SH2 13.3 MB / SH3 15.7 MB | SH3 15.7 MB / identical copy | SH3 15.5 MB / none (`hd_skipped`) |
+| Bundle (du) | 24 MB (rebundled by the viewer fixer, HD copy dropped) | 37 MB (SD, HD, preview) | 24 MB (same) | 24 MB |
+| Walkable, coverage | 12.9 m2, 100% | 12.4 m2, 100% | 12.3 m2, 100% | 10.7 m2, 100% |
+| Walkable cells reach (z max) | 2.17 m | 1.73 m | 4.08 m (1.5 m past the last camera, out the door) | 3.02 m (604 cells past the walls cut) |
+| Spawn pitch | 0 | -5 | 0 | -11.3 (the doorway start, facing in) |
+| Minimap: bare walkable px / painted px over 1 m outside walkable | 30.6% / 19.9% | 0% / 4.4% | 12.4% / 15.5% | 0% / 4.3% |
+| verify | 39 of 39 (viewer fixer's re-run) | 39 of 39 | 39 of 39 (same) | 39 of 39 (first try H2 failed at 54.6 fps while the e2e suite ran; re-run 57.5, then 59.7 after a rescale) |
+| Total stage time | 107 min | 60 min | 73 min | 46 min (from align) |
+
+Both new reports pass all 23 bands of their case in test/expected/report.json. fix-honka still fails the plan's
+22 dB training gate. `./ns rescale fix-vrroom --scale 1.0` (17:24) ran rescale and grid from `repo-fixrun` (the
+wrapper path in the logs), then bundle, verify (39 of 39) and report.
+
+### For root
+- Swap or not: fix-honka and fix-vrroom pass; rh-honka and rh-vrroom are untouched. If you swap them in, use
+  runs/fix-honka/places.json, not viewer/places/rh-honka.json (the frame turned 180 deg). The bundles are named
+  fix-*; a rebundle under another name needs `bundle.py --name`.
+- tyrone's bin/nsdocker is the old copy; docker/nsdocker adds NS_ROOT/NS_WORKDIR and env limits with the same
+  defaults. Only frozen-copy runs use the new one. Installing it (docker/install_host.sh) is your call.
+- Scratch on tyrone: runs/fix-honka (1.7 GB), runs/fix-vrroom (1.8 GB, early stages are hard links into
+  rh-vrroom), runs/fix-bench, runs/fix-sanity, repo-fixrun (120 MB; the fix-* runs record it). 26 GB free at 17:30.
+- Room frames in test/data (#14) need Sher's yes; nothing was added.
+- For the room run: `--repo-dir repo-room` (README section 3). r0 only and 1920 px are now the defaults; with a
+  shared GPU, `--opt train:--long-side=1600` is the fallback.

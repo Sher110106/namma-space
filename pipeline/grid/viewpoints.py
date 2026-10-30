@@ -80,10 +80,20 @@ def kmeans(x: np.ndarray, k: int, seed: int = 0, n_init: int = 8, iters: int = 1
     return best[1], best[2]
 
 
+VIEW_PITCH_RANGE = (-12.0, -5.0)   # review #20: a level view shows the poorly seen ceiling; tilt down like the camera
+
+
+def view_pitch(cam_pitch: float) -> float:
+    """The source camera's own pitch, clamped to VIEW_PITCH_RANGE (phones are held tilted down)."""
+    if not np.isfinite(cam_pitch):
+        return VIEW_PITCH_RANGE[1]
+    return float(min(VIEW_PITCH_RANGE[1], max(VIEW_PITCH_RANGE[0], cam_pitch)))
+
+
 def _view(cams: Cams, k: int, h_cap: float, floor_y: float, name: Optional[str] = None, vid: Optional[str] = None) -> dict:
     c = cams.centres[k]
     d = {"position": [round(float(c[0]), 4), round(floor_y + h_cap, 4), round(float(c[2]), 4)],
-         "yaw_deg": round(yaw_from_forward(cams.forward[k]), 2), "pitch_deg": 0.0}
+         "yaw_deg": round(yaw_from_forward(cams.forward[k]), 2), "pitch_deg": round(view_pitch(float(cams.pitch[k])), 2)}
     if vid is not None:
         d = {"id": vid, "name": name, **d}
     return d
@@ -121,8 +131,19 @@ def choose_spawn(cams: Cams, lay: Layout, walk: np.ndarray, pitch_tol: float = 1
     depth = np.nan_to_num(cams.med_depth[idx], nan=0.0)
     deep = depth >= min_depth
     if deep.any():
+        # review #43: an overview, not the most textured close-up. Among well-seen deep views (point count at least
+        # the median), take the one that stands far from the middle of the walkable area and looks at it.
         idx = idx[deep]
-        best = idx[np.argmax(cams.n_pts[idx])]
+        rich = cams.n_pts[idx] >= np.median(cams.n_pts[idx])
+        idx = idx[rich] if rich.any() else idx
+        wi, wj = np.nonzero(walk)
+        mid = np.array(lay.xz(wi, wj)).mean(axis=1) if len(wi) else cams.centres[:, [0, 2]].mean(axis=0)
+        to_mid = mid[None, :] - cams.centres[idx][:, [0, 2]]
+        dist = np.linalg.norm(to_mid, axis=1)
+        fwd = cams.forward[idx][:, [0, 2]]
+        cosang = (to_mid * fwd).sum(axis=1) / np.maximum(dist * np.linalg.norm(fwd, axis=1), 1e-9)
+        score = dist * np.clip(cosang, 0.0, None) ** 2
+        best = idx[int(np.argmax(score))] if score.max() > 0 else idx[np.argmax(cams.n_pts[idx])]
     else:
         relaxed.append(f"no candidate with median depth >= {min_depth} m")
         best = idx[np.argmax(depth)]

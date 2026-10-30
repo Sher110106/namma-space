@@ -195,7 +195,9 @@ def finish_variant(ctx: Ctx, v: Variant) -> None:
     # --- trajectory sanity filter
     index = {n: i for i, n in enumerate(ctx.names)}
     _, recs = colmapio.read_model(best_dir)
-    cams = [sanity.Cam(index[r.name], r.name, r.centre) for r in recs if r.name in index]
+    # capture time (frames.json kept[].t) when every frame has one, so ingest gaps are not jumps (review #9)
+    cams = [sanity.Cam(index[r.name], r.name, r.centre, ctx.meta.get(r.name, {}).get("t"))
+            for r in recs if r.name in index]
     res = sanity.filter_trajectory(cams)
     v.sane = res
     src = best_dir
@@ -235,6 +237,7 @@ def finish_variant(ctx: Ctx, v: Variant) -> None:
         "track_len": round(post.get("track_len", 0.0), 3),
         "n_dropped": len(res.dropped),
         "max_step_ratio": res.max_step_ratio,
+        "sanity_time_axis": res.time_axis,
         "jumps_left": res.jumps_left,
         "model_sizes": [x["registered"] for x in v.models],
     }

@@ -4,6 +4,8 @@ import { Grid, Walker } from "../src/js/walker.js";
 import { Governor, buildLadder } from "../src/js/governor.js";
 import { TourPath } from "../src/js/tour.js";
 import { randomWalks, headingPushes } from "../src/js/sim.js";
+import { scaleInfo, hdSameAsSd, clearColorOf, DEFAULT_CLEAR } from "../src/js/scene.js";
+import { normalisePlace, placesToJson } from "../src/js/places.js";
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log("ok  ", name); };
@@ -100,22 +102,123 @@ t("fly mode ignores furniture but is clamped to the bounds", () => {
   assert.ok(w.x <= 4 + 1e-9 && w.x > 3.9, `x ${w.x}`);
 });
 
-t("governor: steps down after 2 s under 40 fps, up after 2 s over 55, holds off after a step down", () => {
-  const steps = []; const g = new Governor({ ladder: buildLadder({ previewFallback: true }), onStep: (s) => steps.push(s.name) });
+// --- governor -----------------------------------------------------------------------------------------------------------------
+// Run the governor against a model machine. frameMs(step, now) is the frame time the machine gives at that step.
+function run({ ladder, frameMs, seconds, start = 0, events = {} }) {
+  const kinds = [], confirmed = []; let step;
+  const g = new Governor({ ladder, start, onStep: (s, l, why, kind) => { kinds.push(`${s.name}:${kind}`); step = s; }, onConfirm: (s) => confirmed.push(s.name) });
   let now = 0;
-  for (; now < 2200; now += 30) g.push(30, now);                                     // 33 fps
-  assert.equal(steps[0], "low");
-  for (; now < 4500; now += 30) g.push(30, now);
-  assert.equal(steps[1], "min");
-  for (; now < 9000; now += 16.7) g.push(16.7, now);                                 // 60 fps but inside the 8 s hold-off
-  assert.equal(steps.length, 2);
-  for (; now < 14000; now += 16.7) g.push(16.7, now);
-  assert.equal(steps[2], "low");                                                     // steps back up
+  while (now < seconds * 1000) {
+    if (events[Math.round(now)]) events[Math.round(now)](g);
+    const dt = frameMs(g.step, now); now += dt; g.push(dt, now);
+  }
+  return { g, kinds, confirmed, final: g.step.name, applied: g.history.map((h) => h.step.name) };
+}
+// A GPU-bound machine: work grows with the pixel count; frames are quantised to the display refresh.
+const gpuBound = (workMs, hz = 60) => (s) => { const q = 1000 / hz; return Math.max(q, Math.ceil((workMs * s.pixelRatio * s.pixelRatio * (s.mesh === "preview" ? 0.2 : 1)) / q) * q); };
+
+t("governor: steps down after 2 s under 40 fps when the step helps, and up after 2 s over 55 once the 8 s hold-off ends", () => {
+  const ladder = buildLadder({ previewFallback: true });
+  const r = run({ ladder, frameMs: (s, now) => (now < 9000 ? gpuBound(45)(s) : 16.7), seconds: 28 });
+  assert.equal(r.applied[0], "low");                                                 // first step after about 1.9 s
+  assert.ok(r.g.history[0].t > 1800 && r.g.history[0].t < 2300, String(r.g.history[0].t));
+  assert.equal(r.g.history[0].kind, "down");
+  assert.ok(r.confirmed.includes("low"));                                            // 20 fps -> 30 fps is a gain
+  assert.equal(r.final, "standard");                                                 // the load stops at 9 s: back up after the hold-off
+  assert.ok(r.g.history.some((h) => h.kind === "up"));
 });
-t("governor: two frames over 400 ms step down at once (software rendering)", () => {
+t("governor, capped run: a steady 30 fps (battery saver, vsync half rate) goes back to standard and stays there; never the preview", () => {
+  for (const ms of [33.3, 1000 / 38, 1000 / 35]) {
+    const r = run({ ladder: buildLadder({ previewFallback: true }), frameMs: () => ms, seconds: 40 });
+    assert.equal(r.final, "standard", `${ms}: ${r.applied.join(",")}`);
+    assert.ok(!r.applied.includes("min") && !r.applied.includes("preview"), `${ms}: ${r.applied.join(",")}`);
+    assert.deepEqual(r.applied, ["low", "standard"], `${ms}`);                         // one trial step, then back
+    assert.equal(r.confirmed.length, 0);
+    assert.ok(r.g.history[1].kind === "revert" && /no gain/.test(r.g.history[1].why));
+  }
+});
+t("governor, capped run with a slow start (a loading hiccup at 24 fps, then 30 fps): the first step looks like a gain, the next shows the cap, and the top of the run is measured again and kept", () => {
+  for (const slowUntil of [2600, 3500, 5000]) {
+    const r = run({ ladder: buildLadder({ previewFallback: true }), frameMs: (s, now) => (now < slowUntil ? 41.7 : 33.3), seconds: 40 });
+    assert.equal(r.final, "standard", `${slowUntil}: ${r.applied.join(",")}`);
+    assert.ok(!r.applied.includes("preview"), r.applied.join(","));
+    assert.ok(r.g.history.every((h) => h.kind !== "up" || h.t > 0));
+    assert.equal(r.g.chainTop, null);
+  }
+  // and the same shape on a machine that really is GPU-bound: the steps help, so the top is not restored
+  const g = run({ ladder: buildLadder({ previewFallback: true }), frameMs: gpuBound(60, 60), seconds: 40 });
+  assert.ok(g.g.level >= 1, g.applied.join(","));
+});
+t("governor, capped run: after the trial the cap does not trigger a second step down, but a real drop to 20 fps does", () => {
+  const r = run({ ladder: buildLadder({ previewFallback: true }), frameMs: (s, now) => (now < 20000 ? 33.3 : gpuBound(55)(s)), seconds: 40 });
+  assert.deepEqual(r.applied.slice(0, 2), ["low", "standard"]);
+  assert.ok(r.applied.length > 2, r.applied.join(","));                              // load rose at 20 s: stepped down again (the step helps)
+  assert.ok(r.g.history[2].t > 20000);
+});
+t("governor, stressed run: a GPU-bound machine keeps stepping down while each step raises the frame rate, and settles where more does not help", () => {
+  const ladder = buildLadder({ previewFallback: true });
+  const r = run({ ladder, frameMs: gpuBound(52, 144), seconds: 30 });              // 52 ms of work at pixel ratio 1; 144 Hz display
+  assert.ok(r.confirmed.length >= 2, r.confirmed.join(","));
+  assert.ok(r.applied.includes("min"));
+  assert.ok(r.g.level >= 2);
+  // the stress preset as in test H6: pixel ratio 2 is the problem, 1.4 fixes it
+  const st = run({ ladder: buildLadder({ stress: true }), frameMs: (s) => (s.pixelRatio >= 2 ? 40 : 16.7), seconds: 8 });
+  assert.equal(st.applied[0], "stress-mid"); assert.ok(st.g.history[0].t < 2300); assert.deepEqual(st.confirmed, ["stress-mid"]);
+});
+t("governor, hidden tab: reset() on return, and a single huge frame is not a measurement", () => {
+  const ladder = buildLadder({ previewFallback: true });
+  // 60 fps, a 30 s pause, 60 fps again. main.js calls reset() on visibilitychange and passes no dt for the first frame back.
+  let r = run({ ladder, frameMs: () => 16.7, seconds: 3 });
+  const g = r.g; let now = 3000;
+  now += 30000; g.reset(); for (let i = 0; i < 300; i++) { now += 16.7; g.push(16.7, now); }
+  assert.equal(g.history.length, 0);
+  // no reset (a browser that sends no event): the 30 s frame is dropped as a pause
+  const g2 = new Governor({ ladder, onStep: () => {} }); now = 0;
+  for (let i = 0; i < 120; i++) { now += 16.7; g2.push(16.7, now); }
+  now += 30000; g2.push(30000, now);
+  for (let i = 0; i < 300; i++) { now += 16.7; g2.push(16.7, now); }
+  assert.equal(g2.history.length, 0, JSON.stringify(g2.history.map((h) => h.why)));
+  // a frame of 0.2 s once (a hiccup) does not step down either
+  const g3 = new Governor({ ladder, onStep: () => {} }); now = 0;
+  for (let i = 0; i < 400; i++) { now += i === 100 ? 200 : 16.7; g3.push(i === 100 ? 200 : 16.7, now); }
+  assert.equal(g3.history.length, 0);
+});
+t("governor: two frames over 400 ms step down at once (software rendering), also with a 3 s frame time and with the trial rule on", () => {
   const steps = []; const g = new Governor({ ladder: buildLadder({ previewFallback: true }), onStep: (s) => steps.push(s.name) });
   g.push(900, 1000); assert.equal(steps.length, 0); g.push(900, 1900); assert.equal(steps[0], "low");
   g.push(900, 2800); g.push(900, 3700); assert.equal(steps[1], "min");
+  const slow = []; const g2 = new Governor({ ladder: buildLadder({ previewFallback: true }), onStep: (s) => slow.push(s.name) });
+  g2.push(3000, 3000); g2.push(3000, 6000); g2.push(3000, 9000); g2.push(3000, 12000);   // frames longer than the window still count
+  assert.deepEqual(slow, ["low", "min"]);
+  // the emergency rule does not wait for a trial: it steps even after a capped trial set the block
+  const g3 = new Governor({ ladder: buildLadder({ previewFallback: true }), onStep: () => {} });
+  let now = 0; while (now < 9000) { now += 33.3; g3.push(33.3, now); }
+  const before = g3.level; g3.push(700, now + 700); g3.push(700, now + 1400);
+  assert.equal(g3.level, before + 1);
+});
+t("governor: leaving the benchmark or the reality check clears old samples; HD ladder swap resets the trial", () => {
+  const g = new Governor({ ladder: buildLadder({}), onStep: () => {} }); let now = 0;
+  g.setEnabled(false); for (let i = 0; i < 200; i++) { now += 50; g.push(50, now); }   // slow frames while disabled count for nothing
+  assert.equal(g.samples.length, 0);
+  g.setEnabled(true); now += 16.7; g.push(16.7, now);
+  assert.equal(g.samples.length, 1);
+  g.trial = { from: 0, fps0: 20 }; g.blockFps = 20; g.jumpTo(0); assert.equal(g.trial, null); assert.equal(g.blockFps, null);
+});
+t("governor: after a step up drops the rate under 40 again, it does not climb into that step for a minute (no preview <-> SD flapping)", () => {
+  const ladder = buildLadder({ previewFallback: true });
+  // machine: fine (60 fps) at the preview and 'min' stays at 30 fps whatever the step; standard/low/min cost 50 ms work, the preview costs 0.2 of it
+  const r = run({ ladder, frameMs: (s) => (s.mesh === "preview" ? 7 : gpuBound(80, 144)(s)), seconds: 70 });
+  const ups = r.g.history.filter((h) => h.kind === "up").length;
+  assert.ok(ups <= 2, `ups ${ups}: ${r.applied.join(",")}`);
+});
+t("governor ladder: a step that changes nothing is left out (weak GPUs start at pixel ratio 0.85)", () => {
+  const weak = buildLadder({ basePixelRatio: 0.85, previewFallback: true }).map((l) => l.name);
+  assert.deepEqual(weak, ["standard", "min", "preview"]);
+  const soft = buildLadder({ basePixelRatio: 0.5, previewFallback: true }).map((l) => l.name);
+  assert.deepEqual(soft, ["standard", "preview"].slice(0, 1).concat(soft.slice(1)));
+  assert.equal(soft[0], "standard"); assert.ok(!soft.includes("low") && !soft.includes("min"));
+  assert.deepEqual(buildLadder({ previewFallback: true }).map((l) => l.name), ["standard", "low", "min", "preview"]);
+  const full = buildLadder({}); for (let i = 1; i < full.length; i++) assert.ok(full[i].pixelRatio !== full[i - 1].pixelRatio || full[i].maxStdDev !== full[i - 1].maxStdDev);
 });
 t("governor ladder: SD starts at sqrt(5), HD at the scene value, stress at pixel ratio 2", () => {
   const sd = buildLadder({}), hd = buildLadder({ hd: true }), st = buildLadder({ stress: true });
@@ -133,5 +236,37 @@ t("tour: Catmull-Rom passes through its stops, is deterministic, rescales to the
   const q = new TourPath([{ position: [0, 1, 0], yaw_deg: 170, t: 0 }, { position: [1, 1, 0], yaw_deg: -170, t: 5 }]); // shortest arc across +-180
   assert.ok(Math.abs(q.at(2.5).yawDeg) > 170 || Math.abs(q.at(2.5).yawDeg - 360) < 20, String(q.at(2.5).yawDeg));
   assert.equal(new TourPath([], 60).duration, 0);
+});
+
+// --- wording and scene helpers (review findings 29, 44, 19, 47, 46) ----------------------------------------------------------
+t("scale text: an estimate from the camera-height prior is called an estimate; only a stored check is called checked", () => {
+  const est = scaleInfo({ pct_68: 12.749685157937574, method: "camera_height", checked_against: null });
+  assert.equal(est.short, "est. ±13%"); assert.equal(est.checked, false); assert.match(est.long, /prior on camera height/); assert.match(est.long, /not a measured error/);
+  assert.equal(scaleInfo({ pct_68: 8.3 }).short, "est. ±8.3%");
+  assert.equal(scaleInfo({ pct_68: 0 }).short, "unchecked"); assert.equal(scaleInfo(undefined).short, "unchecked");
+  const chk = scaleInfo({ pct_68: 12.7, checked_against: "tape", check_error_pct: 2.13 });
+  assert.equal(chk.checked, true); assert.equal(chk.short, "tape check +2.1%"); assert.equal(chk.pct, 0); assert.match(chk.long, /off by \+2\.1%/);
+  assert.equal(scaleInfo({ pct_68: 12.7, checked_against: "tape", check_error_pct: -4 }).short, "tape check -4.0%");
+  assert.equal(scaleInfo({ pct_68: 12.7, checked_against: "tape" }).short, "checked (tape)");
+  for (const x of [est, chk]) assert.ok(!/we measured|measured error we/i.test(x.short));
+});
+t("HD is hidden when it is the same file as SD (same URL, or same bytes, count and SH degree), shown when it differs", () => {
+  const e = (url, bytes, count, sh) => ({ url, bytes, count, sh_degree: sh });
+  assert.equal(hdSameAsSd({ sd: e("a/splat_sd.spz", 16087774, 629993, 3), hd: e("a/splat_hd.spz", 16087774, 629993, 3) }), true);
+  assert.equal(hdSameAsSd({ sd: e("a/s.spz", 5, 5, 3), hd: e("a/s.spz", 9, 9, 3) }), true);
+  assert.equal(hdSameAsSd({ sd: e("a/splat_sd.spz", 2410000, 131543, 1), hd: e("a/splat_hd.spz", 2840000, 131543, 3) }), false);
+  assert.equal(hdSameAsSd({ sd: e("a/s.spz", 5, 5, 1), hd: null }), false); assert.equal(hdSameAsSd({ sd: e("a/s.spz", 5, 5, 1) }), false);
+  assert.equal(hdSameAsSd({ sd: e("a/s.spz", 0, 5, 1), hd: e("a/h.spz", 0, 5, 1) }), false);          // unknown sizes: do not guess
+});
+t("clear colour: read from scene.json when valid, else a neutral grey that is not the old near-black", () => {
+  assert.deepEqual(clearColorOf({ clear_color: [120.4, 100, 90] }), [120, 100, 90]);
+  for (const bad of [undefined, {}, { clear_color: [1, 2] }, { clear_color: [1, 2, 300] }, { clear_color: "red" }, { clear_color: [NaN, 1, 2] }]) assert.deepEqual(clearColorOf(bad), DEFAULT_CLEAR);
+  assert.ok(DEFAULT_CLEAR.reduce((a, b) => a + b) > 3 * 30 && DEFAULT_CLEAR.every((v) => v > 11 + 20));
+});
+t("places keep an optional notes line through reading and the editor's JSON", () => {
+  const p = normalisePlace({ name: "Door", position: [1, 0, 2], notes: "placed by hand with the place editor (build team), 30 Oct" });
+  assert.equal(p.notes, "placed by hand with the place editor (build team), 30 Oct");
+  assert.equal(normalisePlace({ name: "Sofa", position: [1, 0, 2] }).notes, undefined);
+  assert.equal(JSON.parse(placesToJson([p]))[0].notes, p.notes);
 });
 console.log(`${n} unit tests passed`);

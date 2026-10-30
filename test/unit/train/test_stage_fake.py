@@ -93,7 +93,7 @@ class FakeStage(unittest.TestCase):
         return self.M.main(["--run", self.run_dir, "--no-scene-unit", "--parallel", "no", *extra])
 
     def test_full_run_chooses_r1_and_cleans_up(self):
-        rc = self.stage()
+        rc = self.stage("--variants", "r0,r1")
         self.assertEqual(rc, 0)
         out = os.path.join(self.run_dir, "50_train")
         self.assertFalse(os.path.exists(out + ".tmp"))
@@ -118,6 +118,16 @@ class FakeStage(unittest.TestCase):
         # strict JSON
         json.loads(open(os.path.join(out, "train.json")).read(), parse_constant=lambda c: self.fail(c))
 
+    def test_default_is_r0_only_with_150_min_limit(self):
+        # review fix #4/#10: one variant by default, 150 min per variant, frames kept up to 1920 px
+        rc = self.stage()
+        self.assertEqual(rc, 0)
+        tj = json.load(open(os.path.join(self.run_dir, "50_train", "train.json")))
+        self.assertEqual([v["name"] for v in tj["variants"]], ["r0"])
+        self.assertEqual(tj["max_minutes"], 150.0)
+        self.assertEqual(tj["long_side"], self.M.TRAIN_LONG_SIDE)
+        self.assertIn("sequential: one variant", tj["parallel_reason"])
+
     def test_done_stage_is_not_redone(self):
         self.assertEqual(self.stage(), 0)
         mtime = os.path.getmtime(os.path.join(self.run_dir, "50_train", "train.json"))
@@ -126,7 +136,7 @@ class FakeStage(unittest.TestCase):
 
     def test_failed_variant_falls_back_to_other(self):
         os.environ["FAKE_FAIL_R1"] = "1"
-        rc = self.stage()
+        rc = self.stage("--variants", "r0,r1")
         tj = json.load(open(os.path.join(self.run_dir, "50_train", "train.json")))
         self.assertEqual(tj["chosen"], "r0")
         r1 = tj["variants"][1]
@@ -190,6 +200,33 @@ class FakeStage(unittest.TestCase):
         self.assertIn("no second GPU slot", why)
         par, lk, why = G.decide_parallel("auto", 1, self.tmp)
         self.assertFalse(par)
+
+
+try:
+    from PIL import Image  # noqa: F401
+    HAVE_PIL = True
+except ImportError:
+    HAVE_PIL = False
+
+
+@unittest.skipUnless(HAVE_PIL, "PIL missing (runs in namma-space-gpu: ./ns test train --remote)")
+class ResizeTest(unittest.TestCase):
+    def test_frames_above_the_long_side_are_resized(self):
+        from PIL import Image
+        from pipeline.train import __main__ as M
+        with tempfile.TemporaryDirectory() as d:
+            src = os.path.join(d, "40_align")
+            make_data(src)
+            for i in range(3):
+                Image.new("RGB", (1920, 1080), (i * 40, 90, 120)).save(os.path.join(src, "images", f"{i:06d}.jpg"))
+            out, size = M.resized_data_dir(src, os.path.join(d, "tmp"), 1600)
+            self.assertEqual(size, (1600, 900))
+            self.assertEqual(M.image_size(os.path.join(out, "images")), (1600, 900))
+            self.assertEqual(len(os.listdir(os.path.join(out, "images"))), 3)
+            self.assertTrue(os.path.isfile(os.path.join(out, "sparse", "0", "cameras.bin")))
+            # at or below the long side: used as is
+            same, size2 = M.resized_data_dir(src, os.path.join(d, "tmp2"), 1920)
+            self.assertEqual((same, size2), (src, (1920, 1080)))
 
 
 class SlotLockTest(unittest.TestCase):

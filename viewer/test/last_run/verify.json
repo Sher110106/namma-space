@@ -1,13 +1,13 @@
 {
   "schema": "namma-space/verify@1",
-  "date": "2026-10-30T04:21:09.369Z",
+  "date": "2026-10-30T11:30:10.081Z",
   "web": "/Users/sher/project/namma-space/viewer/dist",
   "scene": null,
   "browser": "HeadlessChrome/156.0.8078.4",
   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
   "viewport": "1280x720, device pixel ratio 1",
   "summary": {
-    "passed": 32,
+    "passed": 38,
     "failed": 0,
     "not_run": 1
   },
@@ -16,30 +16,30 @@
       "id": "H1",
       "name": "first splat frame <= 5 s from localhost, cold cache; 0 console errors; 0 foreign-origin requests",
       "pass": true,
-      "value": "first frame 0.49 s; 0 console errors; 0 foreign requests",
+      "value": "first frame 0.29 s; 0 console errors; 0 foreign requests",
       "metrics": {
-        "first_frame_s": 0.492,
-        "full_loaded_s": 0.808,
+        "first_frame_s": 0.288,
+        "full_loaded_s": 0.593,
         "console_errors": [],
         "foreign_requests": [],
         "n_requests": 24
       },
-      "detail": "32ms scene url http://127.0.0.1:56701/scenes/honka_demo/scene.json | 139ms grid ready | 259ms preview initialised | 329ms first splat frame | 514ms sd initialised, 800000 splats | 645ms splats active",
-      "seconds": 1.8
+      "detail": "25ms scene url http://127.0.0.1:59534/scenes/honka_demo/scene.json | 50ms grid ready | 143ms preview initialised | 221ms first splat frame | 396ms sd initialised, 800000 splats | 525ms splats active",
+      "seconds": 1.6
     },
     {
       "id": "H2",
       "name": "scripted 20 s walk with SD: mean fps >= 55, p95 frame <= 20 ms (vsync-capped method)",
       "pass": true,
-      "value": "59.6 fps mean, p95 16.8 ms, p99 16.8 ms, max 116.6 ms over 20.9 s (1244 frames); 800000 splats",
+      "value": "60 fps mean, p95 16.8 ms, p99 16.8 ms, max 33.3 ms over 20.8 s (1245 frames); 800000 splats",
       "metrics": {
-        "frames": 1244,
-        "secs": 20.8658,
-        "fps_mean": 59.619089610750606,
+        "frames": 1245,
+        "secs": 20.765900000000002,
+        "fps_mean": 59.95405929913945,
         "p50_ms": 16.69999999999891,
         "p95_ms": 16.799999999999272,
         "p99_ms": 16.80000000000109,
-        "max_ms": 116.59999999999945,
+        "max_ms": 33.29999999999927,
         "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
         "splats": 800000,
         "mb": 18.1,
@@ -47,13 +47,13 @@
         "final_level": 0,
         "browser": "HeadlessChrome/156.0.8078.4",
         "mac_loadavg_1min": {
-          "before": 4.6,
-          "after": 6.5
+          "before": 15.8,
+          "after": 14.2
         },
         "cpus": 8
       },
-      "detail": "walk ended at {\"x\":-4.1999695430270805,\"y\":1.42,\"z\":1.5489215798355636,\"yawDeg\":177.9408086650983,\"pitchDeg\":0}",
-      "seconds": 25
+      "detail": "walk ended at {\"x\":-4.099970998012172,\"y\":1.42,\"z\":1.5499249242845605,\"yawDeg\":177.9408086650983,\"pitchDeg\":0}",
+      "seconds": 24.4
     },
     {
       "id": "H3",
@@ -195,37 +195,37 @@
         ]
       },
       "detail": "",
-      "seconds": 19.6
+      "seconds": 18
     },
     {
       "id": "H4",
       "name": "browser render vs undistorted photo: PSNR >= 18 dB at 3 poses and >= 3 dB above the same poses turned 10 deg",
       "pass": true,
-      "value": "000043: 21.33 dB (rot10 10.85, +10.47); 000141: 22.84 dB (rot10 11.22, +11.62); 000241: 22.04 dB (rot10 13.75, +8.29)",
+      "value": "000043: 21.29 dB (rot10 10.88, +10.41); 000141: 22.02 dB (rot10 11.24, +10.78); 000241: 21.8 dB (rot10 13.76, +8.03)",
       "metrics": {
         "poses": [
           {
             "id": "000043",
-            "psnr": 21.33,
-            "psnr_rot10": 10.85,
-            "gain": 10.47
+            "psnr": 21.29,
+            "psnr_rot10": 10.88,
+            "gain": 10.41
           },
           {
             "id": "000141",
-            "psnr": 22.84,
-            "psnr_rot10": 11.22,
-            "gain": 11.62
+            "psnr": 22.02,
+            "psnr_rot10": 11.24,
+            "gain": 10.78
           },
           {
             "id": "000241",
-            "psnr": 22.04,
-            "psnr_rot10": 13.75,
-            "gain": 8.29
+            "psnr": 21.8,
+            "psnr_rot10": 13.76,
+            "gain": 8.03
           }
         ],
         "source": "training poses (pairs file)"
       },
-      "seconds": 11.4
+      "seconds": 10.5
     },
     {
       "id": "H4b",
@@ -238,24 +238,24 @@
       "id": "H5",
       "name": "touch path moves the player under mobile emulation (left thumb walks, right thumb looks)",
       "pass": true,
-      "value": "moved 1.37 m with the left thumb; turned 22.9 deg with the right; start button tapped: true",
+      "value": "moved 1.30 m with the left thumb; turned 22.9 deg with the right; start button tapped: true",
       "metrics": {
-        "moved_m": 1.369,
+        "moved_m": 1.297,
         "turned_deg": 22.9,
         "heading_deg": 67.5,
         "viewport": "844x390 mobile, touch emulation"
       },
-      "seconds": 5.5
+      "seconds": 4.3
     },
     {
       "id": "H6",
       "name": "?stress=1 (pixel ratio 2): the governor lowers resolution within 3 s",
       "pass": true,
-      "value": "pixel ratio 2 -> 1.4 1838 ms after the first splat frame; settled at stress-mid (1.4)",
+      "value": "pixel ratio 2 -> 1.4 1817 ms after the first splat frame; settled at stress-mid (1.4)",
       "metrics": {
         "pr_start": 2,
         "pr_first_step": 1.4,
-        "first_step_after_ms": 1838,
+        "first_step_after_ms": 1817,
         "settled": {
           "pr": 1.4,
           "level": 1,
@@ -263,39 +263,39 @@
         },
         "history": [
           {
-            "t": 2107,
+            "t": 2142,
             "step": "stress-mid",
             "pr": 1.4,
-            "why": "mean 31.1 fps < 40"
+            "why": "mean 29.5 fps < 40"
           }
         ]
       },
-      "seconds": 6
+      "seconds": 6.1
     },
     {
       "id": "H7",
       "name": "?asset= loads the splat file from a second local origin (CORS), and falls back when that origin has no CORS",
       "pass": true,
-      "value": "cross-origin load ok (800000 splats from 127.0.0.1:59439); no-CORS origin: fell back to own file",
+      "value": "cross-origin load ok (800000 splats from 127.0.0.1:59708); no-CORS origin: fell back to own file",
       "metrics": {
         "cors_origin_requests": 1,
         "console_errors": 0,
         "fallback_urls": [
-          "http://127.0.0.1:59441/scenes/honka_demo/splat_preview.spz",
-          "http://127.0.0.1:59441/scenes/honka_demo/splat_sd.spz"
+          "http://127.0.0.1:59710/scenes/honka_demo/splat_preview.spz",
+          "http://127.0.0.1:59710/scenes/honka_demo/splat_sd.spz"
         ],
-        "first_frame_s": 0.29
+        "first_frame_s": 0.33
       },
       "detail": "",
-      "seconds": 2
+      "seconds": 2.9
     },
     {
       "id": "H8",
       "name": "bundle.py output validates: required keys, files present, sizes match; corrupted bundles are rejected",
       "pass": true,
-      "value": "valid bundle: 81 checks, 0 failed, 26.3 MB; 7/7 corrupted copies rejected",
+      "value": "valid bundle: 82 checks, 0 failed, 26.4 MB; 7/7 corrupted copies rejected",
       "metrics": {
-        "n_checks": 81,
+        "n_checks": 82,
         "warnings": [],
         "mutations": [
           {
@@ -331,21 +331,21 @@
           {
             "name": "heldout_photo_missing",
             "rejected": true,
-            "first_error": "honka_demo: heldout 000000 photo: missing /var/folders/l8/2gfpvm6j1cjg5ln304gxrsjw0000gn/T/ns-h8-TMQLx8/heldout_photo_missing/scenes/honka_demo/heldout/000000.jpg"
+            "first_error": "honka_demo: heldout 000000 photo: missing /var/folders/l8/2gfpvm6j1cjg5ln304gxrsjw0000gn/T/ns-h8-mRlXTD/heldout_photo_missing/scenes/honka_demo/heldout/000000.jpg"
           }
         ],
-        "total_bytes": 26339958
+        "total_bytes": 26352963
       },
-      "seconds": 1.3
+      "seconds": 1.4
     },
     {
       "id": "H9",
       "name": "20 Mbps link: SD fully loaded within 18 s; preview first frame within 4 s",
       "pass": true,
-      "value": "first frame 2.37 s (preview); SD loaded 8.69 s at 20 Mbps (15.5 MB)",
+      "value": "first frame 2.34 s (preview); SD loaded 8.65 s at 20 Mbps (15.5 MB)",
       "metrics": {
-        "first_frame_s": 2.37,
-        "sd_loaded_s": 8.69,
+        "first_frame_s": 2.34,
+        "sd_loaded_s": 8.65,
         "link_mbps": 20,
         "sd_mb": 15.55,
         "has_preview": true,
@@ -371,7 +371,7 @@
         "M": true,
         "help": true
       },
-      "seconds": 2.7
+      "seconds": 2.8
     },
     {
       "id": "X3",
@@ -396,7 +396,7 @@
         "viewport": "1280x720",
         "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
         "scene": "honka_demo",
-        "when": "2026-10-30T04:19:52.552Z"
+        "when": "2026-10-30T11:28:11.654Z"
       },
       "seconds": 13.7
     },
@@ -405,7 +405,7 @@
       "name": "reality check (C): opens over held-out pairs, slider and arrow keys work, Esc returns",
       "pass": true,
       "value": "8 pairs; mode reality; slider clip inset(0px 50% 0px 0px) -> inset(0px 80% 0px 0px); right arrow -> photo 2; Esc -> play; caption \"Held-out photo 1 of 8  (never seen in training)\"",
-      "seconds": 4.4
+      "seconds": 3.7
     },
     {
       "id": "X5",
@@ -450,45 +450,251 @@
       "name": "minimap: view cone and arrow drawn; clicking teleports to the nearest walkable cell",
       "pass": true,
       "value": "minimap image drawn (1280 warm pixels); teleported 6.6 m; landing error 0.07 m",
-      "seconds": 1.6
+      "seconds": 1.7
     },
     {
       "id": "X8",
-      "name": "HD button swaps in splat_hd (a scene without one gets the SD file standing in for HD, to test the mechanism)",
+      "name": "HD button swaps in splat_hd (a scene without one gets the SD file standing in for HD, to test the mechanism); no button when HD equals SD",
       "pass": true,
-      "value": "HD button shown true; HD active with 800000 splats, then back to SD (mechanism test, SD file as HD)",
+      "value": "HD button shown true; HD active with 800000 splats, then back to SD (mechanism test, SD file as HD); an HD entry equal to SD (same bytes, count, SH degree): button hidden true",
       "metrics": {
-        "stand_in": true
+        "stand_in": true,
+        "equal_hd_hidden": true
       },
-      "seconds": 1.5
+      "seconds": 2.6
     },
     {
       "id": "X9",
       "name": "?scene=<name> loads that scene; an unknown scene shows the error card instead of a blank page",
       "pass": true,
-      "value": "known scene ok (title \"Honka room (test fixture) · Namma Space\"); unknown scene -> error card true (Could not load the scene: http://127.0.0.1:61127/scenes/does_not_exist/scene.json: HTTP 404)",
-      "seconds": 0.6
+      "value": "known scene ok (title \"Honka room (test fixture) · Namma Space\"); unknown scene -> error card true (Could not load the scene: http://127.0.0.1:59879/scenes/does_not_exist/scene.json: HTTP 404)",
+      "seconds": 0.8
     },
     {
       "id": "X10",
       "name": "fly mode (F) passes furniture but stays inside the room bounds",
       "pass": true,
       "value": "fly on: true; samples outside bounds 0; samples past furniture/walls 2637",
-      "seconds": 1
+      "seconds": 1.1
     },
     {
       "id": "X11",
       "name": "weak-GPU fallback: the last governor step swaps to the 200 k-splat preview, and steps back up to SD",
       "pass": true,
       "value": "ladder standard > low > min > preview; sd 800000 -> preview 150000 -> sd 800000",
-      "seconds": 3.4
+      "seconds": 3.5
     },
     {
       "id": "X12",
       "name": "L copies a spot link; opening it puts the player at the same pose",
       "pass": true,
       "value": "/index.html?scene=honka_demo&pose=-0.4,1.42,1.39,77,-8 -> yaw 77.0, pitch -8.0",
-      "seconds": 1.7
+      "seconds": 1.6
+    },
+    {
+      "id": "X13",
+      "name": "frame rate capped at 30 fps (battery saver): the governor may try a step, sees no gain, and ends on standard; never on the preview",
+      "pass": true,
+      "value": "capped at 29 fps; governor history [low:down, standard:revert]; ends on sd 800000 splats at pixel ratio 1",
+      "metrics": {
+        "hist": [
+          "low:down",
+          "standard:revert"
+        ],
+        "level": 0,
+        "trial": false,
+        "kind": "sd",
+        "n": 800000,
+        "pr": 1,
+        "fps": 29.03038513645851
+      },
+      "seconds": 14.1
+    },
+    {
+      "id": "X14",
+      "name": "a failed or dropped SD download keeps the preview and shows a toast, not the error card; one retry; the error card (with Reload) only when nothing renders",
+      "pass": true,
+      "value": "HTTP 500 on every SD request: ok (preview, 2 SD requests, walked 0.9 m); connection dropped after 1 MB, every time: ok (preview, 2 SD requests, walked 0.9 m); first SD request fails, the retry works: ok (sd, 2 SD requests); no preview in the scene and SD fails: error card with a Reload button: ok (error card, 2 SD requests)",
+      "metrics": {
+        "rows": [
+          {
+            "label": "HTTP 500 on every SD request",
+            "err": null,
+            "card": false,
+            "reload": true,
+            "kind": "preview",
+            "toasts": [
+              "Download failed, retrying",
+              "The full-quality file did not load. Showing the preview (fewer splats). Reload the page to try again.",
+              "Pointer lock unavailable here: drag to look"
+            ],
+            "fullFailed": true,
+            "loaderHidden": true,
+            "full": true,
+            "goDisabled": false,
+            "started": true,
+            "n": 150000,
+            "moved": 0.9093363523318416,
+            "sd_requests": 2,
+            "ok": true
+          },
+          {
+            "label": "connection dropped after 1 MB, every time",
+            "err": null,
+            "card": false,
+            "reload": true,
+            "kind": "preview",
+            "toasts": [
+              "Download failed, retrying",
+              "The full-quality file did not load. Showing the preview (fewer splats). Reload the page to try again.",
+              "Pointer lock unavailable here: drag to look"
+            ],
+            "fullFailed": true,
+            "loaderHidden": true,
+            "full": true,
+            "goDisabled": false,
+            "started": true,
+            "n": 150000,
+            "moved": 0.9094988298304438,
+            "sd_requests": 2,
+            "ok": true
+          },
+          {
+            "label": "first SD request fails, the retry works",
+            "err": null,
+            "card": false,
+            "reload": true,
+            "kind": "sd",
+            "toasts": [
+              "Download failed, retrying",
+              "Pointer lock unavailable here: drag to look"
+            ],
+            "fullFailed": false,
+            "loaderHidden": true,
+            "full": true,
+            "goDisabled": false,
+            "started": true,
+            "n": 800000,
+            "moved": null,
+            "sd_requests": 2,
+            "ok": true
+          },
+          {
+            "label": "no preview in the scene and SD fails: error card with a Reload button",
+            "err": "Could not load the scene: Failed to fetch \"http://127.0.0.1:59999/scenes/honka_demo/splat_sd.spz\": 500 Internal Server Error",
+            "card": true,
+            "reload": true,
+            "kind": null,
+            "toasts": [
+              "Download failed, retrying"
+            ],
+            "fullFailed": false,
+            "loaderHidden": true,
+            "full": false,
+            "goDisabled": true,
+            "started": false,
+            "n": 0,
+            "moved": null,
+            "sd_requests": 2,
+            "ok": true
+          }
+        ]
+      },
+      "seconds": 7.6
+    },
+    {
+      "id": "X15",
+      "name": "hidden tab: coming back after a long pause does not step the quality down (visibilitychange resets the timer and the governor; no step is judged on the pause)",
+      "pass": true,
+      "value": "after a 6 s pause: timer cleared true, governor samples 0; steps after the pause [none], steps judged on the pause 0; 55 fps",
+      "metrics": {
+        "before": 0,
+        "n": 0,
+        "after": [],
+        "level": 0,
+        "fps": 55.42908047110631,
+        "wired": {
+          "last": null,
+          "samples": 0
+        },
+        "bad": []
+      },
+      "seconds": 16.4
+    },
+    {
+      "id": "X16",
+      "name": "touchscreen laptop (touch support, mouse as main pointer) gets the desktop path: 'Click to start', pointer lock on a mouse click; a phone still gets 'Tap to start'",
+      "pass": true,
+      "value": "laptop (maxTouchPoints 5, pointer fine true): touch path false, button \"Click to start\", pointer lock requests after a mouse click 1; phone: touch path true, button \"Tap to start\"",
+      "metrics": {
+        "lap": {
+          "mtp": 5,
+          "ots": true,
+          "fine": true,
+          "touchDevice": false,
+          "label": "Click to start",
+          "deskHint": true,
+          "measureBtn": false,
+          "started": true,
+          "locks": 1,
+          "resumePill": false
+        },
+        "phone": {
+          "touchDevice": true,
+          "label": "Tap to start",
+          "touchHint": true
+        }
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "X17",
+      "name": "progress before the 3 MB of JS arrives: the loading text is in the HTML, the bar moves, modulepreload links are present; real progress text follows",
+      "pass": true,
+      "value": "static text \"Loading the 3D viewer code. This takes longer on a slow link.\"; 4 modulepreload links; at 1.2 s: loader shown true, bar animation ns-wait, text \"Loading the 3D viewer code. This takes longer on a slow link.\"; after load: loader hidden true",
+      "metrics": {
+        "staticText": "Loading the 3D viewer code. This takes longer on a slow link.",
+        "preloads": [
+          "./vendor/three.module.js",
+          "./vendor/three.core.js",
+          "./vendor/spark.module.js",
+          "./js/main.js"
+        ],
+        "early": {
+          "sub": "Loading the 3D viewer code. This takes longer on a slow link.",
+          "shown": true,
+          "wait": true,
+          "anim": "ns-wait",
+          "ns": false
+        },
+        "late": {
+          "wait": false,
+          "hidden": true,
+          "sub": "splats 15.5 / 15.5 MB"
+        }
+      },
+      "seconds": 3.3
+    },
+    {
+      "id": "X18",
+      "name": "clear colour: dark while loading (the first-frame probe needs it), then the scene's neutral colour; hidden HD when it equals SD",
+      "pass": true,
+      "value": "clear colour after the first splat frame [121,120,117] (scene.json [121,120,117]); HD button hidden true (scene has HD false)",
+      "metrics": {
+        "rgb": [
+          121,
+          120,
+          117
+        ],
+        "ns": [
+          121,
+          120,
+          117
+        ],
+        "hdHidden": true,
+        "hasHd": false
+      },
+      "seconds": 0.9
     },
     {
       "id": "R0",
@@ -535,7 +741,7 @@
         "search_typo_cases": 9
       },
       "detail": "",
-      "seconds": 6.5
+      "seconds": 6.4
     },
     {
       "id": "R1",
@@ -550,7 +756,7 @@
         "worst_ratio": 1.013,
         "failures": []
       },
-      "seconds": 2.1
+      "seconds": 1.9
     },
     {
       "id": "R2",
@@ -625,7 +831,7 @@
           }
         ]
       },
-      "seconds": 2.1
+      "seconds": 2.2
     },
     {
       "id": "R3",
@@ -725,25 +931,25 @@
         ],
         "no_match_text": "No match. Try Wall display, Meeting table, Forest picture."
       },
-      "seconds": 7.7
+      "seconds": 7.8
     },
     {
       "id": "R4",
       "name": "follow mode (G then Space) walks the route to the place at walking speed, stays on walkable cells, faces the place; a move key stops it",
       "pass": true,
-      "value": "route 10.3 m (7.4 s at 1.4 m/s) to \"wall-display\"; walked it in 7.6 s (mean 1.35 m/s incl. start turn); 0 of 73 samples off walkable cells; ended 0.203 m from the stand spot, 3 deg off facing the place; toast \"Arrived: Wall display\"; W key stopped follow: true",
+      "value": "route 10.3 m (7.4 s at 1.4 m/s) to \"wall-display\"; walked it in 7.6 s (mean 1.35 m/s incl. start turn); 0 of 73 samples off walkable cells; ended 0.203 m from the stand spot, 0 deg off the direction to the place from the stand spot; toast \"Arrived: Wall display\"; W key stopped follow: true",
       "metrics": {
         "place": "wall-display",
         "route_m": 10.316,
         "seconds": 7.6,
-        "mean_mps": 1.354,
+        "mean_mps": 1.35,
         "samples": 73,
         "blocked_samples": 0,
-        "max_off_route_m": 0.162,
+        "max_off_route_m": 0.165,
         "end_error_m": 0.203,
-        "yaw_error_deg": 3
+        "yaw_error_deg": 0
       },
-      "seconds": 12.9
+      "seconds": 12.7
     },
     {
       "id": "R5",
@@ -758,13 +964,14 @@
         "no_path": {
           "ok": false,
           "reason": "No walking route: Coffee counter is in an area you cannot reach on foot.",
+          "id": "coffee-counter",
           "card": "No walking route: Coffee counter is in an area you cannot reach on foot.",
           "bad": true,
           "mesh": false,
           "follow_btn_hidden": true
         }
       },
-      "seconds": 4.2
+      "seconds": 3.3
     },
     {
       "id": "R6",
@@ -778,7 +985,7 @@
           "error_cm": 0
         },
         "scale_pct_68": 15,
-        "label": "1.02 m ± 0.15 m68% interval from the scale check: ±15% (assumed: median camera height = 1.42 m). Points on splats or the floor plane. Click again to start over.",
+        "label": "1.02 m ± 0.15 mEstimated scale, 68% range ±15%. It comes from a prior on camera height; it is not a measured error. Method: assumed: median camera height = 1.42 m. Points on splats or the floor plane. Click again to start over.",
         "splat": {
           "src": [
             "splat",
@@ -800,7 +1007,7 @@
           ]
         }
       },
-      "seconds": 6.9
+      "seconds": 6.6
     },
     {
       "id": "R7",
@@ -815,7 +1022,7 @@
         "bundle_ok": true,
         "bundle_warnings": []
       },
-      "seconds": 7.8
+      "seconds": 6.9
     },
     {
       "id": "R8",
@@ -827,29 +1034,29 @@
         "route_pixels_before": 0,
         "route_pixels_after": 185
       },
-      "seconds": 3.2
+      "seconds": 2.5
     },
     {
       "id": "R9",
       "name": "start card and ? help list the new keys; ?place=&route=1 opens with the route drawn; no console errors in the whole flow",
       "pass": true,
-      "value": "start card mentions search, Round 2 preview and measure; help lists / J G Space K P; ?place=door&route=1 -> route drawn (true); 0 console errors",
+      "value": "start card mentions search, Round 2 preview and measure; help lists / J G Space K P; ?place=wall-display&route=1 -> route drawn (true); 0 console errors",
       "metrics": {
         "console_errors": [],
         "flag": {
-          "sel": "door",
+          "sel": "wall-display",
           "route": true,
           "on": true,
           "mesh": true
         }
       },
-      "seconds": 1.6
+      "seconds": 1.7
     },
     {
       "id": "R10",
       "name": "phone (390x844 touch): the search button is usable, results are tappable (>= 40 px), card and buttons fit the screen, Route works by touch",
       "pass": true,
-      "value": "search button 40x36 px; box opens and takes focus: true; result row 44 px high; tapped \"coffee-counter\"; card 366 px wide fits; Route button 36 px high; route by touch: true",
+      "value": "search button 40x36 px; box opens and takes focus: true; result row 44 px high; tapped \"wall-display\"; card 366 px wide fits; Route button 36 px high; route by touch: true",
       "metrics": {
         "search_button": {
           "x": 338,
@@ -895,7 +1102,7 @@
           }
         }
       },
-      "seconds": 3.7
+      "seconds": 3.6
     }
   ],
   "viewer": {
@@ -904,8 +1111,8 @@
         "name": "MacBook (Apple M1), headless Chrome, ANGLE Metal, 1280x720, pixel ratio 1",
         "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
         "browser": "HeadlessChrome/156.0.8078.4",
-        "first_frame_s": 0.492,
-        "fps_mean": 59.6,
+        "first_frame_s": 0.288,
+        "fps_mean": 60,
         "p95_ms": 16.8,
         "mb": 18.1,
         "splats": 800000,
@@ -915,7 +1122,7 @@
         "name": "same machine, tour benchmark (T)",
         "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
         "browser": "HeadlessChrome/156.0.8078.4",
-        "first_frame_s": 0.492,
+        "first_frame_s": 0.288,
         "fps_mean": 60,
         "p95_ms": 16.7,
         "mb": 18.1,
