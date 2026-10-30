@@ -58,12 +58,8 @@ def _load_points(path: Path):
     raise ValueError(path)
 
 
-def score_mesh(mesh_path: Path, gt_path: Path, icp_path: Path, threshold: float = 0.05):
+def _score_points(ours: np.ndarray, gt: np.ndarray, threshold: float = 0.05):
     from scipy.spatial import cKDTree
-    ours = _load_points(mesh_path)
-    gt = _load_points(gt_path)
-    T = np.asarray(json.loads(icp_path.read_text())["gt_transformation"], dtype=float)
-    ours = (T[:3, :3] @ ours.T).T + T[:3, 3]
     d_ours = cKDTree(gt).query(ours, workers=-1)[0]
     d_gt = cKDTree(ours).query(gt, workers=-1)[0]
     precision = float(np.mean(d_ours <= threshold))
@@ -74,12 +70,39 @@ def score_mesh(mesh_path: Path, gt_path: Path, icp_path: Path, threshold: float 
             "precision_5cm": precision, "recall_5cm": recall, "n_ours": int(len(ours)), "n_gt": int(len(gt))}
 
 
+def score_mesh(mesh_path: Path, gt_path: Path, icp_path: Path, threshold: float = 0.05,
+               pre_transform: np.ndarray | None = None):
+    """Return raw and standard cropped scores in the Faro frame.
+
+    The crop removes predicted points outside the Faro mesh bounding box grown
+    by 5 cm.  Ground-truth points are left unchanged, so completeness remains
+    a coverage measure over the complete Faro scan.
+    """
+    ours = _load_points(mesh_path)
+    gt = _load_points(gt_path)
+    T = np.asarray(json.loads(icp_path.read_text())["gt_transformation"], dtype=float)
+    if pre_transform is not None:
+        P = np.asarray(pre_transform, dtype=float)
+        ours = (P[:3, :3] @ ours.T).T + P[:3, 3]
+    ours = (T[:3, :3] @ ours.T).T + T[:3, 3]
+    raw = _score_points(ours, gt, threshold)
+    lo, hi = gt.min(axis=0) - 0.05, gt.max(axis=0) + 0.05
+    keep = np.all((ours >= lo) & (ours <= hi), axis=1)
+    cropped = _score_points(ours[keep], gt, threshold)
+    return {"raw": raw, "cropped": cropped,
+            "crop": {"kind": "predicted_inside_gt_bbox_grown", "grow_m": 0.05,
+                     "gt_bbox_min_m": lo.tolist(), "gt_bbox_max_m": hi.tolist(),
+                     "n_removed": int((~keep).sum())}}
+
+
 def figure(path: Path, score: dict):
     im = Image.new("RGB", (900, 500), "white")
     dr = ImageDraw.Draw(im)
     dr.text((35, 25), "MuSHRoom LiDAR TSDF baseline", fill="black")
-    vals = [("accuracy (cm)", score["accuracy_m"] * 100), ("completeness (cm)", score["completeness_m"] * 100),
-            ("F-score @ 5 cm", score["f_score_5cm"] * 100)]
+    s = score["cropped"] if "cropped" in score else score
+    vals = [("accuracy (cm, cropped)", s["accuracy_m"] * 100),
+            ("completeness (cm, cropped)", s["completeness_m"] * 100),
+            ("F-score @ 5 cm (cropped)", s["f_score_5cm"] * 100)]
     for i, (label, val) in enumerate(vals):
         y = 100 + i * 115
         dr.text((35, y), f"{label}: {val:.3f}", fill="black")
@@ -106,14 +129,16 @@ def main(argv=None):
     except Exception:
         sha = "unknown"
     result = {"schema": "namma-space/eval@1", "name": a.name, "kind": "mushroom_lidar_baseline",
+              "status": "complete",
               "dataset": str(root), "pose_source": "iphone/long_capture/transformations.json",
               "pose_convention": "OpenGL c2w converted with diag(1,-1,-1)", "depth_units": "millimetres / 1000",
               "views": len(views), "stride": a.stride, "voxel_size_m": 0.02, "sdf_trunc_m": 0.08,
               "depth_trunc_m": 5.0, "icp": str(root / "icp_iphone.json"), "score": score,
-              "fusion": "Open3D ScalableTSDFVolume primary; deterministic point-surface fallback if volume extraction is empty",
+              "headline_protocol": "cropped",
+              "fusion": "Open3D ScalableTSDFVolume attempted with float32 metre depth, uint8 HxWx3 colour, matching intrinsics, convert_rgb_to_intensity=False, and inverse(c2w) extrinsics; pinned Open3D 0.20 returned zero vertices, so deterministic point-surface fallback was used",
               "git": sha, "date": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
               "image_digests": {"dataset": digest(root / "iphone/long_capture"), "gt_mesh": digest(root / "gt_mesh.ply")},
-              "command": "python eval/score_mushroom.py --dataset ... --out ..."}
+              "command": f"python -m eval.score_mushroom --dataset {root} --out {a.out}"}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(result, indent=2) + "\n")
     figure(a.out.with_suffix(".png"), score)

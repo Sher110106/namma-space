@@ -1,0 +1,115 @@
+{
+  "schema": "namma-space/eval@1",
+  "name": "mushroom_vr_room_ours",
+  "kind": "mushroom_phone_only",
+  "status": "complete",
+  "run": "/w/runs/rh-vrroom",
+  "dataset": "/w/data/mushroom/room_datasets/vr_room",
+  "ply": "/w/runs/rh-vrroom/60_export/clean.ply",
+  "views": 420,
+  "matched_views": 420,
+  "pose_source": "40_align/sparse/0 COLMAP cameras matched by basename to MuSHRoom transformations.json",
+  "pose_convention": "COLMAP/OpenCV c2w; MuSHRoom OpenGL c2w centres matched, depth scalar compared in camera rays",
+  "scale": {
+    "s_ours_m_per_sfm_unit": 0.4264736664570656,
+    "s_true_m_per_raw_sfm_unit": 0.44010978295648157,
+    "fit_scale_aligned_to_dataset": 1.0319741113506449,
+    "fit_rmse_m_all": 0.01407901868895968,
+    "fit_rmse_m_inliers": 0.009683839337578212,
+    "fit_n": 294,
+    "matched_n": 420,
+    "automatic_error_pct": 3.0983443285023116,
+    "automatic_error_definition": "abs(s_ours/s_true - 1) * 100",
+    "interval_68_m_per_raw_sfm_unit": [
+      0.378248210502468,
+      0.48084771621185424
+    ],
+    "true_inside_interval_68": true,
+    "similarity_matrix": [
+      [
+        0.3058476111304226,
+        -0.0019502673014054916,
+        0.9856084423954671,
+        -3.179225626873899
+      ],
+      [
+        0.9850808875484037,
+        -0.03321707562276688,
+        -0.3057496318425788,
+        -0.7004460447652658
+      ],
+      [
+        0.03230248056441831,
+        1.0314375351142102,
+        -0.007982944623440747,
+        -1.4001789297893814
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "depth_vs_lidar": {
+    "heldout_every": 8,
+    "heldout_views": 53,
+    "pixels": 37888886,
+    "median_abs_error_cm": 8.485043048858643,
+    "within_5cm_frac": 0.34305144257870235,
+    "within_10cm_frac": 0.5546883062225688,
+    "fit_scale_applied": 1.0319741113506449
+  },
+  "geometry": {
+    "raw": {
+      "accuracy_m": 0.4400273915362819,
+      "completeness_m": 0.049419941339877496,
+      "accuracy_median_m": 0.27415933404344917,
+      "completeness_median_m": 0.03496419210204593,
+      "f_score_5cm": 0.22593815942980247,
+      "precision_5cm": 0.13537658332713415,
+      "recall_5cm": 0.6825110149737917,
+      "n_ours": 591476,
+      "n_gt": 4260110
+    },
+    "cropped": {
+      "accuracy_m": 0.2801993282067472,
+      "completeness_m": 0.04952668942068878,
+      "accuracy_median_m": 0.17811257851837126,
+      "completeness_median_m": 0.03496419210204593,
+      "f_score_5cm": 0.29386392173228193,
+      "precision_5cm": 0.1872416050883921,
+      "recall_5cm": 0.6825110149737917,
+      "n_ours": 427640,
+      "n_gt": 4260110
+    },
+    "crop": {
+      "kind": "predicted_inside_gt_bbox_grown",
+      "grow_m": 0.05,
+      "gt_bbox_min_m": [
+        -3.245458650588989,
+        -3.2860100746154783,
+        -0.034375357627868655
+      ],
+      "gt_bbox_max_m": [
+        3.5472743988037108,
+        3.5094132900238035,
+        3.652901458740234
+      ],
+      "n_removed": 163836
+    }
+  },
+  "headline_protocol": "cropped predicted points inside Faro mesh bbox grown by 5 cm",
+  "fusion": "Open3D ScalableTSDFVolume attempted; pinned Open3D 0.20 returned zero vertices in the synthetic probe, so deterministic point-surface fallback was used",
+  "voxel_size_m": 0.02,
+  "sdf_trunc_m": 0.08,
+  "depth_trunc_m": 5.0,
+  "git": "unknown",
+  "date": "2026-10-30T06:43:55+00:00",
+  "image_digests": {
+    "dataset": "4a902cde179983378c7ea183450b64080eb94a31c8d45cfdcad71ed8174679d9",
+    "gt_mesh": "6bbb479d2af91badf0f1f743fca1f0472e90bfb54f479a3e597d954f75715daf"
+  },
+  "command": "python -m eval.score_phone_only --run /w/runs/rh-vrroom --dataset /w/data/mushroom/room_datasets/vr_room --out /w/runs/w7-vrroom/mushroom_vr_room_ours.json"
+}
