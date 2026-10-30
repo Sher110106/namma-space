@@ -1,9 +1,238 @@
-<!doctype html><meta charset="utf-8"><title>Namma Space technical abstract</title>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Namma Space: technical abstract</title>
 <style>
-@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font:10.2pt Arial,sans-serif;color:#161616;line-height:1.28;margin:0}h1{font-size:24pt;margin:0 0 4mm}h2{font-size:16pt;border-bottom:2px solid #111;padding-bottom:2mm;margin:0 0 4mm}h3{font-size:11pt;margin:3mm 0 1mm}p{margin:0 0 2.5mm}small{color:#555}.page{min-height:250mm;break-after:page}.page:last-child{break-after:auto}.grid{display:grid;grid-template-columns:1fr 1fr;gap:4mm}.card{border:1px solid #aaa;padding:3mm;border-radius:2mm}.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:2mm}.metric{background:#eee;padding:2mm}.metric b{font-size:14pt;display:block}.figure{border:1px solid #777;padding:2mm;margin:3mm 0}.figure svg{width:100%;height:54mm}.tbl{width:100%;border-collapse:collapse;font-size:8.3pt}.tbl th,.tbl td{border:1px solid #aaa;padding:1.5mm;vertical-align:top}.tbl th{background:#eee}.tag{font-weight:bold;letter-spacing:.03em}.muted{color:#555}.roadmap{columns:2}.roadmap li{margin-bottom:1.5mm}.qr{display:inline-block;border:3px solid #111;padding:5mm;margin-top:2mm;font-weight:bold}
-</style>
-<section class="page"><h1>Namma Space</h1><p class="tag">Technical abstract · Team ${report.name} · ${report.git}</p><p>One ordinary phone video becomes a photoreal, metric, walkable Gaussian-splat twin in a browser. The system keeps the capture simple, measures each stage, and carries scale and camera conventions through the export.</p><div class="card"><b>Viewer link</b><br><code>${viewer.url}</code><br><span class="qr">QR placeholder; render after the URL is known.</span></div><div class="card"><b>Scope</b><br>Round One ships one indoor room, with a second connected space only when take B passes its gate. The viewer is a browser page with a walk controller and a walkable grid. Search, route planning, multiple floors and WebXR AR are not built.</div><div class="metrics"><div class="metric"><b>${timings.total}</b>stage seconds</div><div class="metric"><b>${frames.n_kept}</b>kept frames</div><div class="metric"><b>${sfm.chosen.reg_frac}</b>registered share</div><div class="metric"><b>${train.chosen.psnr}</b>held-out PSNR</div><div class="metric"><b>${grid.walkable_m2}</b>walkable area</div></div><div class="figure"><svg viewBox="0 0 910 240" role="img"><defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#111"/></marker></defs><g font-family="Arial" font-size="11" text-anchor="middle"><g fill="#f0f0f0" stroke="#111"><rect x="10" y="85" width="96" height="70"/><rect x="110" y="85" width="96" height="70"/><rect x="210" y="85" width="96" height="70"/><rect x="310" y="85" width="96" height="70"/><rect x="410" y="85" width="96" height="70"/><rect x="510" y="85" width="96" height="70"/><rect x="610" y="85" width="96" height="70"/><rect x="710" y="85" width="96" height="70"/><rect x="810" y="85" width="96" height="70"/></g><g><text x="58.0" y="112">capture SOP</text><text x="58.0" y="132">phone video</text><text x="158.0" y="112">check</text><text x="158.0" y="132">PASS/WARN/FAIL</text><text x="258.0" y="112">frames</text><text x="258.0" y="132">selected JPGs</text><text x="358.0" y="112">SfM race</text><text x="358.0" y="132">ALIKED + LightGlue</text><text x="458.0" y="112">align + scale</text><text x="458.0" y="132">metric frame</text><text x="558.0" y="112">gsplat MCMC</text><text x="558.0" y="132">training</text><text x="658.0" y="112">clean + SPZ</text><text x="658.0" y="132">export</text><text x="758.0" y="112">walkable grid</text><text x="758.0" y="132">collision + map</text><text x="858.0" y="112">browser viewer</text><text x="858.0" y="132">Spark + three.js</text></g><g stroke="#111" marker-end="url(#a)"><path d="M106 120h4"/><path d="M206 120h4"/><path d="M306 120h4"/><path d="M406 120h4"/><path d="M506 120h4"/><path d="M606 120h4"/><path d="M706 120h4"/><path d="M806 120h4"/></g></g></svg><small>Figure one. The measured path from capture to walkable viewer. Tool and licence details are on page four.</small></div><p><b>Position.</b> Namma Space puts measured fidelity on phone-only input beside a browser twin that behaves like a place. We report the camera path, scale interval, held-out image scores, wall tests and device timings from the run record.</p></section>
-<section class="page"><h2>Capture SOP and quality gates</h2><div class="grid"><div><h3>Three passes</h3><p>Take A starts at the doorway, follows an outer wall loop, an inner loop facing the walls, and a low pass around the floor and furniture. At each corner the phone looks to the ceiling corner. Take B repeats the room, crosses the door slowly, covers the next space and returns. The phone stays on the one-times lens, in landscape, with focus, exposure and white balance locked.</p><h3>Why each rule</h3><table class="tbl"><tr><th>Rule</th><th>Failure it prevents</th></tr><tr><td>Move, do not spin</td><td>Parallax stays in the images, so SfM can link views.</td></tr><tr><td>Lock exposure and focus; HDR off</td><td>Colour shifts do not become blotches or floaters.</td></tr><tr><td>One lens</td><td>A lens switch does not change the camera model.</td></tr><tr><td>Inner loop and corner tilt-ups</td><td>Walls and ceiling corners get nearby views.</td></tr><tr><td>Low pass</td><td>Floor and space under furniture get coverage.</td></tr><tr><td>Slow door crossing both ways</td><td>Loop pairs can connect the two spaces.</td></tr><tr><td>Still room and twenty-five fps under flicker</td><td>Moving objects and banding do not enter the model.</td></tr></table></div><div><h3>Check and ingest</h3><p><code>./ns check</code> reads metadata, blur and luma. It returns PASS, WARN or FAIL and prints the time range to reshoot. Ingest decodes rotation, tone maps HDR when needed, samples the video, keeps sharp frames, removes near duplicates and writes the selected images in capture order.</p><table class="tbl"><tr><th>Recorded value</th><th>Run key</th></tr><tr><td>Input check</td><td>${input.check.verdict}</td></tr><tr><td>Frames kept</td><td>${frames.n_kept}</td></tr><tr><td>Rejected for blur</td><td>${frames.dropped.blur}</td></tr><tr><td>Registered share</td><td>${sfm.chosen.reg_frac}</td></tr><tr><td>Camera jump flag</td><td>${sfm.chosen.status}</td></tr><tr><td>Scale interval</td><td>${align.scale.pct_68}</td></tr></table><h3>What the four SOP items mean</h3><p><b>Camera angles:</b> outer, inner and low passes. <b>Corner shots:</b> tilt-ups. <b>Floor plan:</b> the hand sketch is an input; the grid and minimap are computed outputs. <b>Sensors:</b> phone camera only, by choice.</p><div class="card"><b>Scale rule.</b> Gravity and a floor plane set the frame. Camera height, optional metric depth and tape checks are fused in log space. The result is an interval, carried as <code>T_final</code>; a rescale does not retrain the splats.</div></div></div></section>
-<section class="page"><h2>Pipeline and technical approach</h2><h3>Poses and alignment</h3><p>COLMAP runs an ALIKED plus LightGlue path and a CPU SIFT plus LightGlue path. A global mapping pass can reuse the best database. We choose the largest valid model by registration, reprojection error and point count, then undistort to a pinhole model. The race makes a broken room visible early and keeps the fallback local.</p><h3>Appearance and geometry</h3><p>gsplat trains MCMC splats with world normalisation off, anti-aliasing and a bilateral grid. Held-out poses choose the variant. Export removes invalid, opaque, huge and camera-bubble splats, then writes compact SPZ files. A light grid from the splats supplies walk collision, spawn and the minimap; the splat remains the renderer.</p><h3>Browser path</h3><p>Spark renders the SPZ asset and three.js carries the camera convention. The scene bundle stores the transform, floor, scale interval, bookmarks, tour and held-out photo poses. The viewer loads a small preview before the standard file and lowers quality when a device needs it.</p><h3>Failure handling</h3><p>Each stage writes its JSON only after its temporary output is complete. A partial SfM model is labelled. Training keeps the measured variant. Export, grid and viewer validators reject missing files, bad counts, wrong grid values and convention errors. The offline bundle and video remain available when a hosted page is unavailable.</p><div class="card"><b>Limits.</b> The capture has no LiDAR input. Public-room comparisons are evaluation evidence, not claims about a user's room. Device results are tied to the recorded browser and GPU. The current viewer does not search places or draw routes.</div><h3>Evidence keys</h3><p class="muted">Run record: <code>report.json</code>, stage timings: <code>timings.json</code>, and evaluation files under <code>eval/results/*.json</code>. Every numeric field on this page comes from those records.</p></section>
-<section class="page"><h2>Results, viewer checks and licences</h2><div class="grid"><div><h3>Model and viewer</h3><table class="tbl"><tr><th>Measure</th><th>Value</th></tr><tr><td>SD splats / size</td><td>${export.sd.count} / ${export.sd.mb}</td></tr><tr><td>HD splats / size</td><td>${export.hd.count} / ${export.hd.mb}</td></tr><tr><td>Held-out PSNR / SSIM / LPIPS</td><td>${train.chosen.psnr} / ${train.chosen.ssim} / ${train.chosen.lpips}</td></tr><tr><td>Path coverage</td><td>${grid.path_coverage}</td></tr><tr><td>Wall walks / pushes / penetrations</td><td>${walls.walks} / ${walls.pushes} / ${walls.penetrations}</td></tr></table><h3>Device record</h3><p>${viewer.devices}</p></div><div><h3>Failure table</h3><table class="tbl"><tr><th>Observed issue</th><th>Guard</th></tr><tr><td>Far camera segment in a smoke run</td><td>trajectory outlier filter before training</td></tr><tr><td>Large SPZ fill rate on a busy GPU</td><td>standard render cap and quality governor</td></tr><tr><td>Touch start card off screen</td><td>compact landscape layout and sticky control</td></tr><tr><td>Missing addon import</td><td>vendored import map and bundle validator</td></tr><tr><td>Hosted page unavailable</td><td>offline zip and recorded walkthrough</td></tr></table><h3>Licence summary</h3><p>Product code and selected tools use Apache, BSD, MIT or compatible terms. The exact table, source links and rejected list are in <code>LICENSES.md</code>. The stock COLMAP CUDA image includes SiftGPU and LSD, but this pipeline never calls them. NVIDIA driver, CUDA and cuDNN remain proprietary system libraries.</p></div></div></section>
-<section class="page"><h2>Credits, cost and next work</h2><h3>Measured cost card</h3><table class="tbl"><tr><th>Item</th><th>Value</th></tr><tr><td>Capture duration</td><td>${input.files}</td></tr><tr><td>GPU time</td><td>${timings.gpu_s}</td></tr><tr><td>Viewer bytes</td><td>${viewer.bytes}</td></tr><tr><td>Static host</td><td>${viewer.hosting}</td></tr></table><h3>Bottlenecks and compute request</h3><p>The shared GPU spends time in feature matching and splat optimisation. A larger queue of quiet GPUs would reduce the wait for the SfM race, two training variants, and the public-room checks. The requested resource is a measured, local batch slot with enough memory for the selected SPZ export; the run log reports the actual need after capture.</p><h3>Data and code</h3><p>MuSHRoom, Mip-NeRF 360 and the other public rooms are credited in <code>LICENSES.md</code> and used for evaluation only. User input is published only after sign-off. The repository is Apache-2.0. The viewer vendor directory carries the Spark and three.js notices.</p><h3>Not built yet</h3><ul class="roadmap"><li>POI search and place labels</li><li>route planning over the grid</li><li>multiple floors and stairs</li><li>WebXR AR arrows</li><li>plan registration to an organizer drawing</li></ul><h3>Submission links</h3><p>Viewer: <code>${viewer.url}</code><br>Repository: <code>${report.repo_url}</code><br>Video: <code>${viewer.video_url}</code></p><p class="muted">This abstract states only values present in the supplied run and evaluation JSON. Missing evidence is shown as unavailable by the renderer.</p></section>
+*{box-sizing:border-box}
+body{font:8.9pt/1.3 Helvetica,Arial,sans-serif;color:#161616;margin:0}
+h1{font-size:25pt;margin:0 0 1mm;letter-spacing:-.3pt}
+h2{font-size:13.5pt;border-bottom:2px solid #111;padding-bottom:1mm;margin:0 0 2.5mm}
+h3{font-size:9.8pt;margin:3mm 0 1mm}
+p{margin:0 0 1.8mm}
+ul{margin:0 0 2mm;padding-left:4.5mm}li{margin:0 0 .8mm}
+.page{height:272mm;break-after:page;overflow:hidden}
+.page:last-child{break-after:auto}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
+.cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3mm}
+.box{border:1px solid #777;padding:2.2mm 3mm;margin:2.5mm 0;background:#fafafa}
+.banner{background:#fff3cd;border:1px solid #c9a227;padding:1.5mm 3mm;margin:0 0 3mm;font-weight:bold}
+.slot{background:#ffe1a8;border:1px dashed #a35c00;padding:0 1.2mm;font-weight:bold}
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:2mm;margin:2.5mm 0}
+.metric{border:1px solid #999;padding:1.8mm;background:#f1f1f1}
+.metric b{display:block;font-size:13pt}.metric span{display:block;font-size:7.3pt;color:#444}
+.fig{margin:2mm 0;border:1px solid #bbb;padding:1.5mm}
+.fig img{width:100%;display:block}
+.fig .cap,.cap{font-size:7.6pt;color:#333;margin-top:1mm}
+table{border-collapse:collapse;width:100%;font-size:7.9pt;margin:1mm 0 2mm}
+th,td{border:1px solid #aaa;padding:.9mm 1.4mm;text-align:left;vertical-align:top}
+th{background:#ececec}
+td.n,th.n{text-align:right}
+code{font-size:8pt;background:#eee;padding:0 .8mm}
+.muted{color:#555}.small{font-size:7.6pt}
+</style></head><body>
+
+<!-- PAGE 1 -->
+<section class="page">
+<h1>Namma Space</h1>
+<p><b>Technical abstract</b> &middot; Techfest IIT Bombay, Round 1 &middot; Team ID: ${team_id_html}</p>
+<div class="banner">${dryrun_banner}</div>
+<p>Namma Space turns one ordinary phone video into a level 3D scene of an indoor space, with an estimated real-world scale, that anyone can walk through in a web browser. It needs one command, no LiDAR and no hand editing. Every tool is open and allows commercial use.</p>
+<div class="box"><b>Web viewer:</b> ${viewer_link_html}<br><span class="small muted">${viewer_pending} Offline copy: the static folder <code>runs/${run}/80_web/</code> opens with <code>python3 -m http.server</code>.</span><br>
+<b>Code:</b> ${repo_link_html} &nbsp; <b>Video:</b> ${video_link_html}</div>
+
+<div style="display:flex;gap:4mm;align-items:flex-start">
+ <div class="fig" style="width:62mm;flex:none"><img src="${fig_dir}/twin.jpg" style="height:74mm;object-fit:cover"><div class="cap"><b>Figure 1a.</b> A view inside the scene: our render at a held-out camera pose (photo and render side by side: Figure 3).</div></div>
+ <div class="fig" style="flex:1"><img src="${fig_dir}/plan.png" style="height:74mm;object-fit:contain"><div class="cap"><b>Figure 1b.</b> The plan the viewer walks on, computed from the same grid that stops you at walls and draws the minimap (${walkable} m&sup2; walkable, room extent ${extent} m).</div></div>
+</div>
+
+<h3>Five numbers, and where each was measured</h3>
+<div class="metrics">
+ <div class="metric"><b>${psnr} dB</b>held-out PSNR<span>this run (${scene_title}); SSIM ${ssim}, LPIPS ${lpips}; ${heldout_n} photos never used in training</span></div>
+ <div class="metric"><b>${honka_scale_err} / ${vr_scale_err}</b>automatic scale error<span>two public rooms against laser-scan poses; true scale inside the 68 % interval in both</span></div>
+ <div class="metric"><b>${honka_f_ours} vs ${honka_f_lidar}</b>F@5cm, phone vs iPhone LiDAR<span>public room honka, same fusion and crop (Section 3 gives the caveat)</span></div>
+ <div class="metric"><b>${dev_fps} fps</b>walk in the browser<span>p95 frame ${dev_p95}, scene on screen after ${dev_first}; Apple M1, headless Chrome only</span></div>
+ <div class="metric"><b>${t_total_min}</b>time to scene<span>this run, all stages; ${t_gpu_min} of it in GPU stages</span></div>
+</div>
+
+<h3>What a visitor can do</h3>
+<p>Walk in first person with the keyboard or a phone touch pad. Walls and furniture stop you (${walls_n} random walks and ${pushes_n} pushes into walls: ${penetrations} positions inside blocked cells). Jump with the minimap. Press C to compare a held-out photo with the render at the same pose. Press T for a fixed tour that prints the machine's own frame rate. Press K to measure between two points, with the scale interval shown. The scene downloads ${dev_mb} (SD file ${sd_mb} MB plus a ${preview_mb} MB preview that loads before it).</p>
+<h3>Scope</h3>
+<ul>
+<li><b>In scope:</b> one indoor room from one phone video; a second space through a door only if take B registers (<code>docs/claims.md</code>).</li>
+<li><b>Also built:</b> ${places_note}</li>
+<li><b>Not built:</b> multiple floors, WebXR AR on phones, registration of an architect's plan.</li>
+<li><b>Scale:</b> ${scale_status}; cue used: ${scale_cue}; interval ${scale_interval}. Public-room checks are in Section 3.</li></ul>
+</section>
+
+<!-- PAGE 2 -->
+<section class="page">
+<h2>1. Capture SOP</h2>
+<p>The SOP is a one-page phone card (<code>docs/SOP_card.pdf</code>) and a longer page that gives the reason for each rule (<code>docs/SOP.md</code>). One phone, one lens, about 20 minutes of filming. The sensor is the phone camera only, by choice.</p>
+<div class="cols">
+<div>
+<h3>Settings</h3>
+<table><tr><th>Setting</th><th>Value</th></tr>
+<tr><td>Video</td><td>4K, 30 fps (25 fps if lights flicker), HDR off, 1x lens, landscape</td></tr>
+<tr><td>Focus, exposure</td><td>Locked (AE/AF LOCK) on a mid-bright wall</td></tr>
+<tr><td>Stabilisation</td><td>Enhanced stabilisation, Action mode, Auto FPS off</td></tr>
+<tr><td>Room</td><td>Nobody in shot, fans off, door wedged open, mirrors covered, all lights on</td></tr>
+<tr><td>Before filming</td><td>Clean lens, 5 GB free, a 30 s test clip run through <code>./ns check</code></td></tr></table>
+<h3>Walk (take A, 3 to 4 min, one continuous video)</h3>
+<ul><li>Hold still 3 s in the doorway.</li>
+<li><b>Outer loop:</b> 0.5 m from the walls, camera across the room.</li>
+<li><b>Inner loop:</b> 1.5 m from the walls, camera at the nearest wall, tilted slightly down. Tilt up to each ceiling corner for 2 s.</li>
+<li><b>Low pass:</b> waist height, 30&deg; down, around tables and furniture.</li>
+<li>Take B (optional): cross the door slowly both ways to link a second space.</li>
+<li>Never: spin on the spot, zoom, switch lens, walk fast.</li></ul>
+</div>
+<div>
+<svg viewBox="0 0 300 215" width="100%" style="border:1px solid #bbb;background:#fff">
+<rect x="20" y="20" width="260" height="170" fill="none" stroke="#111" stroke-width="3"/>
+<rect x="110" y="75" width="85" height="55" fill="#ddd" stroke="#555"/>
+<path d="M150 20 v-6" stroke="#fff" stroke-width="4"/><text x="152" y="12" font-size="9">door</text>
+<rect x="32" y="32" width="236" height="146" rx="6" fill="none" stroke="#c0392b" stroke-width="2.4"/>
+<rect x="52" y="52" width="196" height="106" rx="6" fill="none" stroke="#2471a3" stroke-width="2.4" stroke-dasharray="7 4"/>
+<ellipse cx="152" cy="102" rx="68" ry="40" fill="none" stroke="#1e8449" stroke-width="2.4" stroke-dasharray="2 4"/>
+<circle cx="150" cy="30" r="4" fill="#111"/>
+<g font-size="9"><text x="40" y="29" fill="#c0392b">outer: camera across the room</text>
+<text x="58" y="48" fill="#2471a3">inner: camera at the walls</text>
+<text x="125" y="104" fill="#1e8449">low pass</text></g>
+<text x="24" y="206" font-size="8.5" fill="#333">Planned passes (schematic). Start and end at the dot.</text></svg>
+<h3>Capture check (<code>./ns check</code>, about 1 min per video)</h3>
+<table><tr><th>Check</th><th>PASS</th><th>FAIL</th></tr>
+<tr><td>Duration</td><td>90-420 s</td><td>under 45 s</td></tr>
+<tr><td>Short side</td><td>1080 px or more</td><td>under 720 px</td></tr>
+<tr><td>Frame rate</td><td>24-60</td><td>under 24</td></tr>
+<tr><td>Blur: sharp 0.5 s windows</td><td>80 % or more</td><td>under 60 %</td></tr>
+<tr><td>Exposure drift</td><td>under 8 %</td><td>over 15 %</td></tr>
+<tr><td>HDR</td><td>absent</td><td>WARN (we tone-map)</td></tr></table>
+<p class="small">A FAIL means reshoot; the check prints the time ranges to redo. <b>This run:</b> input ${capture}; check verdict: ${check_verdict}; ${frames_kept} frames kept of ${frames_cand}, ${blur_drops} dropped as blurred.</p>
+</div></div>
+<h3>Why each rule (failure it prevents)</h3>
+<table><tr><th style="width:36%">Rule</th><th>Failure it prevents</th></tr>
+<tr><td>Move, do not spin</td><td>No parallax, so the camera path fails or splits</td></tr>
+<tr><td>Lock exposure, focus and white balance; HDR off</td><td>Colour flicker turns into blotches; HDR frames decode washed out</td></tr>
+<tr><td>1x lens, Lock Camera</td><td>A lens switch in the clip breaks the single-camera model</td></tr>
+<tr><td>Inner loop facing walls; corner tilt-ups</td><td>Walls stay solid when a visitor walks close</td></tr>
+<tr><td>Low pass</td><td>The floor and the space under furniture get covered</td></tr>
+<tr><td>Cross the door slowly, both ways</td><td>Loop detection finds the image pairs that link two spaces</td></tr>
+<tr><td>Fans off, door wedged, nobody inside</td><td>Moving things leave ghosts</td></tr></table>
+<h3>How the SOP answers the four items on the organizers' slide</h3>
+<table><tr><th>Item</th><th>Answer</th></tr>
+<tr><td>Camera angles</td><td>Three passes: outer (camera across the room), inner (camera at the walls), low (camera on floor and furniture)</td></tr>
+<tr><td>Corner shots</td><td>Tilt-ups to each ceiling corner, 2 s each</td></tr>
+<tr><td>Floor plan</td><td>A hand sketch goes in; the pipeline computes a levelled, scaled plan from the model (Figure 1b)</td></tr>
+<tr><td>Sensors</td><td>Phone camera only, by choice</td></tr></table>
+</section>
+
+<!-- PAGE 3 -->
+<section class="page">
+<h2>2. Pipeline and approach</h2>
+<div class="fig"><img src="${fig_dir}/architecture.svg"><div class="cap"><b>Figure 2.</b> The pipeline, with stage times measured in this run (${scene_title}). One command, <code>./ns run video.mp4</code>, runs it; each stage writes a record and can resume.</div></div>
+<div class="cols">
+<div>
+<h3>Poses: a race between variants</h3>
+<p>COLMAP 4.2.1 runs ${sfm_n_variants} pose variants (SIFT or ALIKED features, LightGlue matching, sequential matching with loop detection). A rule picks the winner: the highest share of frames in one model at low reprojection error. Here variant ${sfm_name} won (${sfm_desc}): ${sfm_reg} of frames registered, ${sfm_reproj} mean reprojection error. Selection note: ${sfm_why}.</p>
+<h3>Level and scale</h3>
+<p>The camera path gives the up direction and the floor. The scale comes from cues with a stated uncertainty. In this run the cue is ${scale_cue}, giving ${scale_interval}; the scale is ${scale_status}. Up-direction cues agree to ${up_resid} (gate: 5&deg;). The fused scale and its interval travel with the scene, so a later tape measurement rescales it without retraining.</p>
+<h3>Training</h3>
+<p>gsplat 1.5.3 with the MCMC strategy, a bilateral grid for exposure drift and anti-aliasing. We checked that our trainer matches the published one on Mip-NeRF 360 &ldquo;room&rdquo;: ${mip_psnr} dB against ${mip_pub} dB published (${mip_delta} dB). Two variants train: r0, and r1 (r0 plus a depth loss). This run shipped ${train_name} (${train_why}): ${n_gs} splats, PSNR ${psnr} dB on ${heldout_n} held-out photos.</p>
+</div>
+<div>
+<h3>Splat for looks, grid for walking</h3>
+<p>Visitors see the splats. Collision, the minimap and routes use a light 5 cm grid computed from the same geometry (${walkable} m&sup2; walkable here). The splat file alone is a poor collision surface, because it has no clean walls. The browser never loads a mesh.</p>
+<h3>Export and viewer</h3>
+<p>Cleaning removes floaters and splats outside the room. Export writes SPZ files: an SD scene (${sd_count} splats, ${sd_mb} MB, PSNR change ${sd_psnr_drop} dB from cleaning and compression) and a ${preview_mb} MB preview that loads before it. The viewer is static files (three.js and Spark). It starts at a pixel ratio that fits the GPU and lowers it if the frame rate drops.</p>
+<h3>Failure handling</h3>
+<p>Every stage has an exit code and a record. A capture check gates the run. A quality gate flags weak results instead of hiding them. Gate warnings this run:</p>
+<ul class="small">${run_warnings_html}</ul>
+<p>Manual steps logged for this run: ${overrides}.</p>
+</div></div>
+<h3>Stage times, this run</h3>
+<table><tr><th>Ingest</th><th>Pose race</th><th>Level + scale</th><th>Train</th><th>Geometry</th><th>Export</th><th>Grid</th><th>Total</th></tr>
+<tr><td>${t_ingest}</td><td>${t_sfm}</td><td>${t_align}</td><td>${t_train}</td><td>${t_geometry}</td><td>${t_export}</td><td>${t_grid}</td><td><b>${t_total_min}</b></td></tr></table>
+<p class="small muted">All stages ran in Docker containers on a shared NVIDIA RTX A6000 host; the Mac runs the capture check, the bundle step and the browser tests. Other jobs shared the GPU, so these times are upper bounds.</p>
+</section>
+
+<!-- PAGE 4 -->
+<section class="page">
+<h2>3. Results</h2>
+<div class="fig"><img src="${fig_dir}/pairs.jpg"><div class="cap"><b>Figure 3.</b> Held-out photos (never used in training) beside our render at the same pose, for ${scene_title}. We show the lowest, middle and highest PSNR of the ${heldout_n} held-out photos, not a chosen best. The render is a gsplat render of the exported scene; the viewer's own render matches it (test H4b in <code>90_verify/verify.json</code>). The viewer's C key shows the same pairs with a slider.</div></div>
+<div class="cols">
+<div>
+<h3>Image scores (held-out photos)</h3>
+<table><tr><th>Scene</th><th class="n">PSNR dB</th><th class="n">SSIM</th><th class="n">LPIPS</th></tr>
+<tr><td>This run: ${scene_title}</td><td class="n">${psnr}</td><td class="n">${ssim}</td><td class="n">${lpips}</td></tr>
+<tr><td>Public room honka</td><td class="n">${honka_img_psnr}</td><td class="n">${honka_img_ssim}</td><td class="n">${honka_img_lpips}</td></tr>
+<tr><td>Public room vr_room</td><td class="n">${vr_img_psnr}</td><td class="n">${vr_img_ssim}</td><td class="n">${vr_img_lpips}</td></tr>
+<tr><td>Mip-NeRF 360 room, trainer check</td><td class="n">${mip_psnr}</td><td class="n">${mip_ssim}</td><td class="n">${mip_lpips}</td></tr></table>
+<p class="small">The Mip-NeRF 360 row checks the trainer on a standard scene; published ${mip_pub} dB. Indoor phone captures score lower, as the top three rows show. Scores come from <code>report.json</code> and <code>eval/results/mip360_room.json</code>.</p>
+<h3>Scale check on two public rooms</h3>
+<table><tr><th>Room</th><th class="n">Automatic scale error</th><th>True scale inside 68 % interval</th></tr>
+<tr><td>honka</td><td class="n">${honka_scale_err}</td><td>${honka_inside}</td></tr>
+<tr><td>vr_room</td><td class="n">${vr_scale_err}</td><td>${vr_inside}</td></tr></table>
+<p class="small">Scale from camera height alone, compared with the dataset's laser-scanner-aligned poses (MuSHRoom, CC BY 4.0). In our own room the scale is ${scale_status}.</p>
+</div>
+<div>
+<h3>Geometry against the Faro laser scan</h3>
+<table><tr><th>Room, method</th><th class="n">F@5cm</th><th class="n">Accuracy cm</th><th class="n">Complete. cm</th></tr>
+<tr><td>honka, phone only (ours)</td><td class="n">${honka_f_ours}</td><td class="n">${honka_acc_ours}</td><td class="n">${honka_comp_ours}</td></tr>
+<tr><td>honka, iPhone LiDAR fusion</td><td class="n">${honka_f_lidar}</td><td class="n">${honka_acc_lidar}</td><td class="n">${honka_comp_lidar}</td></tr>
+<tr><td>vr_room, phone only (ours)</td><td class="n">${vr_f_ours}</td><td class="n">${vr_acc_ours}</td><td class="n">${vr_comp_ours}</td></tr>
+<tr><td>vr_room, iPhone LiDAR fusion</td><td class="n">${vr_f_lidar}</td><td class="n">${vr_acc_lidar}</td><td class="n">${vr_comp_lidar}</td></tr></table>
+<p class="small">Both rows use the same fusion (${fusion}, 2 cm voxels) and the same crop (inside the laser mesh box plus 5 cm). Our F@5cm is ${honka_f_ratio} of the LiDAR value on honka and ${vr_f_ratio} on vr_room: it is lower, and we do not call it close. <b>Caveat:</b> before scoring, our camera path was fitted to the dataset's camera path with rotation, offset <i>and scale</i> (scale factors ${honka_fit_scale} and ${vr_fit_scale}). The fit removes our own scale error, which is reported separately above. The phone-only score is a best case for shape, not what the pipeline gives end to end. The LiDAR rows use the dataset's own poses and no fit.</p>
+<h3>Depth against LiDAR depth, held-out views</h3>
+<table><tr><th>Room</th><th class="n">Median error</th><th class="n">Within 5 cm</th></tr>
+<tr><td>honka</td><td class="n">${honka_depth_med} cm</td><td class="n">${honka_depth_5}</td></tr>
+<tr><td>vr_room</td><td class="n">${vr_depth_med} cm</td><td class="n">${vr_depth_5}</td></tr></table>
+</div></div>
+<h3>Viewer, measured</h3>
+<table><tr><th>Test</th><th>Result</th><th>Where</th></tr>
+<tr><td>Walk, 20 s scripted</td><td>${dev_fps} fps, p95 ${dev_p95}, scene on screen after ${dev_first}, ${dev_splats} splats, ${dev_mb}</td><td rowspan="3">${dev_name}. Headless Chrome on one Apple M1 only. 60 fps is the display cap, so it shows no dropped frames, not spare speed. Safari, Firefox, phones and integrated GPUs are not measured; other hardware is unverified.</td></tr>
+<tr><td>Tour benchmark (T)</td><td>${bench_fps} fps, p95 ${bench_p95} over ${bench_secs}</td></tr>
+<tr><td>Wall test</td><td>${walls_n} random walks and ${pushes_n} wall pushes: ${penetrations} positions in blocked cells</td></tr></table>
+</section>
+
+<!-- PAGE 5 -->
+<section class="page">
+<h2>4. Licences, credits, cost and limits</h2>
+<div class="cols">
+<div>
+<h3>Licences of the product path</h3>
+<table><tr><th>Component</th><th>Licence</th><th>Role</th></tr>${licence_rows_html}</table>
+<p class="small">Full list with versions and sources: <code>LICENSES.md</code> (generated from <code>docs/licenses.yaml</code>, checked by <code>docs/tools/check_licenses.py</code>). Rejected for licence reasons, and never run: ${rejected_text}.</p>
+<h3>Two disclosures</h3>
+<ul class="small">${disclosures_html}</ul>
+<h3>Data credits</h3>
+<ul class="small">${eval_credits_html}<li>Tool notices: <code>viewer/vendor/LICENSES</code>, <code>LICENSES.md</code>.</li></ul>
+</div>
+<div>
+<h3>Cost card, this run</h3>
+<table><tr><th>Item</th><th>Value</th></tr>
+<tr><td>Capture</td><td>${capture}</td></tr>
+<tr><td>Run time, all stages</td><td>${t_total_min}</td></tr>
+<tr><td>Of which in GPU stages (pose race, train, geometry, export)</td><td>${t_gpu_min}</td></tr>
+<tr><td>Visitor download</td><td>${dev_mb} (preview loads before the full scene)</td></tr>
+<tr><td>Hosting</td><td>Static files, no server code</td></tr></table>
+<h3>Bottlenecks and compute request</h3>
+<p>Training (${t_train}) and the pose race (${t_sfm}) take almost all the time. Both run on one shared GPU, so other jobs stretch them. Peak GPU memory in training was ${peak_gpu} GB, so memory is not the limit; time is. A GPU with no other jobs, or a second one, would let the training variants run side by side instead of in turn.</p>
+<h3>Limits</h3>
+<ul>
+<li>Our fidelity numbers come from public rooms and this run, not from every room. The public-room checks do not show that every capture will work.</li>
+<li>Scale is an estimate with an interval. It is ${scale_status}.</li>
+<li>Phone-only geometry scored below iPhone LiDAR fusion on both public rooms (Section 3).</li>
+<li>Viewer numbers come from one Apple M1 in headless Chrome. Other hardware, including integrated graphics, is unverified.</li>
+<li>Ceilings and close-up walls look soft. Glass, mirrors and bare walls are hard for the pose race (see the SOP).</li>
+<li>Training at 1920 px frames has not been timed on a full run.</li></ul>
+<h3>Roadmap, <i>not built</i></h3>
+<p>Multiple floors; WebXR AR on phones; registration of an architect's plan. Search, jump, routes and follow are built as a Round 2 preview over hand-placed places; Round 1 does not depend on them.</p>
+</div></div>
+<h3>What went wrong, and what we changed</h3>
+<table><tr><th style="width:40%">Failure</th><th>Change</th><th style="width:22%">Record</th></tr>
+<tr><td>On 1920 px frames from a 4K test clip, one pose variant ran out of GPU memory. The clip, a pan over still photos, registered only 28-36 % of frames.</td><td>That variant now extracts features at 1024 px; SfM then ran to the end on 1920 px frames.</td><td><code>pipeline/remote/INTEGRATION_LOG.md</code></td></tr>
+<tr><td>Up-direction cues disagreed by more than 5&deg; on honka and vr_room.</td><td>The quality gate flags it and the run records the warning; a plane-cue fix cut the up error on vr_room.</td><td><code>report.json</code> warnings</td></tr>
+<tr><td>On vr_room one training variant crashed with a CUDA assert in the MCMC relocation step.</td><td>The runner shipped the other variant and logged the crash.</td><td><code>runs/rh-vrroom/50_train/train.json</code></td></tr>
+<tr><td>The initial route cost made 3 of 600 test routes more than 10 % longer than the grid optimum (worst 1.165x).</td><td>Lighter wall cost plus clearance levels: worst 1.049x.</td><td><code>viewer/NOTES.md</code></td></tr>
+</table>
+<p class="small muted">vr_room is a rehearsal room, not an unseen one: three code fixes came out of it (<code>run.json</code> lists the manual restarts).</p>
+<p class="small"><b>Files behind every number:</b> <code>runs/${run}/report.json</code>, <code>timings.json</code>, <code>90_verify/verify.json</code>, <code>eval/results/*.json</code> (git ${git}). Rebuild this PDF: <code>docs/tools/build_docs.sh ${run}</code>.</p>
+</section>
+</body></html>

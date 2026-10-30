@@ -1,7 +1,0 @@
-[0:00-0:20] Built from one phone video. Running in a browser. Nothing to install.
-[0:20-0:35] Namma Space turns one ordinary phone video into a measured room you can walk through. The numbers on screen come from the run record.
-[0:35-1:20] The capture uses one lens, locked focus and exposure, and three slow passes: the walls, the walls from inside, and the floor around furniture. Corner tilt-ups and a slow door crossing give the matcher shared views. The check reports blur, exposure and frame rate before the long run.
-[1:20-2:20] One command writes selected frames, runs two pose paths, levels the model, fuses scale cues, trains splats, removes invalid points, exports SPZ, and makes the walkable grid. The viewer and the record use the same frame.
-[2:20-3:30] In the browser, WASD moves the camera and the grid stops it at walls. M opens the map. C places a held-out photo beside the render. T runs the tour and reports the frame rate. The HUD shows the current quality level.
-[3:30-4:00] These are measured values from the room and public test data. The licence file lists code, weights, data and system dependencies. Unverified items stay marked.
-[4:00-4:20] Round 1 scope is one indoor room. Place search, routes, multiple floors and WebXR AR are not built yet. The repository, offline bundle, abstract and evidence are linked in the proof-of-concept document.

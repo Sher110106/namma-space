@@ -1,9 +1,0 @@
-{
-  "schema": "namma-space/eval@1",
-  "name": "zipnerf_berlin",
-  "kind": "internal_stretch",
-  "status": "not_run",
-  "reason": "J6 is P2 and the shared GPU is occupied by the required J1 run",
-  "metrics": null,
-  "date": "2026-10-30T09:30:00+05:30"
-}

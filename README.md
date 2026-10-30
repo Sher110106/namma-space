@@ -2,37 +2,71 @@
 
 **One phone video. One command. A room you can walk through.**
 
-Namma Space turns an ordinary indoor phone video into a level, real-scale Gaussian-splat scene with a browser walk controller. The Round 1 path uses local open-source tools and keeps scale, camera poses, collision and the minimap in one frame.
+Namma Space turns an ordinary indoor phone video into a level 3D Gaussian-splat scene, with an estimated real-world scale, that you walk through in a web browser. It needs no LiDAR and no hand editing. Every tool in the path is open and allows commercial use (`LICENSES.md`).
 
-![Walkthrough GIF placeholder](docs/abstract/walkthrough.gif)
+![Walking through the scene](docs/media/walk.gif)
+
+*A held-out photo (never used in training) beside our render at the same pose, three examples, and the plan the viewer walks on:*
+
+![Held-out photos beside our renders](docs/media/pairs.jpg)
+![Walkable plan](docs/media/plan.png)
+
+## Results
+
+<!-- results:start -->
+Measured on `rh-honka` (a public room; the final entry uses our own room, `room`). Sources: `runs/rh-honka/report.json`, `timings.json`, `90_verify/verify.json`, `eval/results/*.json`.
+
+| What | Value |
+|---|---|
+| Scene | MuSHRoom honka (public test room) (MuSHRoom honka, iPhone long capture, 335 frames) |
+| Held-out photos, PSNR / SSIM / LPIPS | 21.35 dB / 0.812 / 0.225 (8 photos never used in training) |
+| Scene size | 629,993 splats, 16.1 MB (plus a 3.4 MB preview) |
+| Walk in the browser | 59.4 fps, p95 16.7 ms, on screen after 0.60 s (one Apple M1, headless Chrome; other hardware unverified) |
+| Run time | 107 min in all stages, 106 min of it in GPU stages (shared RTX A6000) |
+| Scale | ±13 % (68 % interval); estimated, not checked by tape |
+| Walls | 200 random walks and 16 pushes: 0 positions in blocked cells |
+| Scale check, two public rooms | 3.3 % (honka), 3.1 % (vr_room) automatic error; true scale inside the 68 % interval in both |
+| Geometry vs Faro laser scan, F@5cm | honka 0.63 phone only vs 0.80 iPhone LiDAR fusion; vr_room 0.37 vs 0.74 (same fusion and crop; our camera path was fitted to the dataset path first, scale included) |
+| Trainer check, Mip-NeRF 360 room | 32.48 dB (published 31.36 dB) |
+<!-- results:end -->
+
+Phone-only geometry scored below iPhone LiDAR fusion on both public rooms. Details and caveats: `eval/README.md`.
 
 ## Run it
 
 ```bash
-./ns run path/to/video.mp4
+./ns doctor                              # checks the Mac tools and the GPU host
+./ns run path/to/video.mp4 --name room   # capture check, then every stage, then the viewer folder
+python3 viewer/tools/serve.py runs/room/80_web   # open http://127.0.0.1:5178/?scene=room
 ```
 
-The measured run time is `${timings.total}` seconds on `${hardware.name}` with `${hardware.gpu}`. Values are filled in the submitted report; this screen does not invent a result.
+Setup (Mac tools, a GPU host with Docker, the images, headless Chrome through Playwright or `NS_CHROME`) is in `test/README.md`, section "What you need". About 1.5 hours per room on a shared RTX A6000; the measured stage times are in `runs/<run>/timings.json`.
 
 ## Smoke test
 
+A 10 to 25 minute run on 60 public photos (sample data is in `test/data/honka60/`):
+
 ```bash
-./ns test all
+./ns run --frames test/data/honka60/frames --name smoke --quick \
+    --kind public --license "CC BY 4.0" --attribution "MuSHRoom dataset (Ren et al. 2024), room honka"
 ```
+
+Unit and end-to-end tests (no GPU needed for most): `./ns test all`.
 
 ## Viewer
 
-Viewer link: `${viewer.url}`  
-Offline copy: `viewer/dist/` (run `python3 -m http.server 8000` there).
+Hosted link: not published yet. It goes here after we approve publishing: `[HOSTED LINK]`.
+Offline copy: the `80_web/` folder of a run (for the public dry-run room: `runs/rh-honka/80_web/`). Run `python3 -m http.server 8000` in it and open `http://localhost:8000/?scene=rh-honka`.
+Keys: WASD walk, M map, C photo-versus-render check, T tour benchmark, K measure, ? help.
 
-## Docs
+## Documents
 
-- `docs/SOP.md` and `docs/SOP_card.pdf`: capture steps and checks
-- `LICENSES.md`: generated licence and credit table
-- `docs/abstract/template.html`: technical abstract source
-- `docs/poc/00_START_HERE_Proof_of_Concept_and_Links.html`: judge path and links
-- `video/storyboard.md`: demo plan and narration
+- `docs/SOP.md` and `docs/SOP_card.pdf`: capture steps and checks.
+- `docs/build/01_Technical_Abstract*.pdf` and `00_START_HERE*.pdf`: built by `docs/tools/build_docs.sh <run>`.
+- `video/`: demo video script and build (`video/build_video.sh <run>`).
+- `eval/README.md`: public-room checks and their caveats. `docs/claims.md`: what we may claim, and the evidence.
+- `LICENSES.md`: licences and credits.
 
 ## Licence
 
-Repository code is Apache-2.0. Product and model licences are listed in `LICENSES.md`; unresolved items stay marked as unverified.
+Repository code is Apache-2.0. Product and model licences are listed in `LICENSES.md`; unverified items stay marked as unverified.

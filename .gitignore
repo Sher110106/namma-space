@@ -11,3 +11,6 @@ viewer/dist/scenes/
 .venv/
 **/.venv/
 viewer/test/last_run/*.png
+docs/build/
+video/out/
+video/.footage/

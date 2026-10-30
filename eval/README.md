@@ -1,114 +1,84 @@
-# WP7 evaluation
+# Evaluation evidence
 
-All numbers in `results/*.json` are generated on tyrone with the pinned
-`namma-space-gpu:0.2` image.  Each result records its exact command, Git SHA,
-date, input digests, pose convention, and metric parameters.  PNGs next to the
-JSON files are the corresponding compact figure.
+This folder holds the checks behind our numbers: how close phone-only geometry, scale and depth come to the public MuSHRoom reference data, whether our trainer matches published image scores on Mip-NeRF 360, and a code check of the fusion step. Every figure and table comes from the JSON files in `results/`.
 
-## J1 trainer parity (Mip-NeRF 360 room)
+Redraw all figures: `python eval/make_figures.py` (needs matplotlib). Print the tables below: `python eval/make_figures.py --table`.
 
-The parity run uses gsplat's shipped trainer and dataset poses:
+## Results
 
-```sh
-nsdocker --gpu w7-mip360 namma-space-gpu:0.1 \
-  python /opt/gsplat/examples/simple_trainer.py mcmc \
-  --data-dir /w/data/mipnerf360/room --data-factor 2 --max-steps 30000 \
-  --eval-steps 30000 --save-steps 30000 --ply-steps 30000 --save-ply \
-  --disable-viewer --disable-video --result-dir /w/runs/w7-mip360
-```
+<!-- table:start -->
+Geometry against the Faro scan (cropped). Ours is scored after the 7-DoF fit.
 
-The held-out split is gsplat's default `test_every=8`, with image names sorted
-by the parser.  The published comparison point is 31.36 dB.  SSIM and LPIPS
-are copied from the trainer's final evaluation JSON, never estimated from a
-different renderer.
+| Room | Method | F@5cm | Precision | Recall | Accuracy (m) | Completeness (m) | F@5cm ours / LiDAR |
+|---|---|---:|---:|---:|---:|---:|---:|
+| honka | Phone-only (ours) | 0.630 | 0.564 | 0.713 | 0.099 | 0.048 | 78.5% |
+| honka | iPhone LiDAR fusion | 0.803 | 0.723 | 0.902 | 0.119 | 0.031 |  |
+| vr_room | Phone-only (ours) | 0.367 | 0.301 | 0.472 | 0.217 | 0.082 | 49.9% |
+| vr_room | iPhone LiDAR fusion | 0.737 | 0.657 | 0.838 | 0.171 | 0.039 |  |
 
-The completed run measured **32.482353 dB PSNR, 0.9378889 SSIM, and 0.1323258
-AlexNet LPIPS** on 39 held-out images (311 total).
+Scale (automatic, before the fit) and depth against iPhone LiDAR depth (phone-only).
 
-## J2/J4 LiDAR TSDF baseline
+| Room | Scale error | True scale in 68% interval | Fit scale | Depth median error | Within 5 cm | Within 10 cm | Held-out views |
+|---|---:|:---:|---:|---:|---:|---:|---:|
+| honka | 3.26% | yes | 0.968 | 4.91 cm | 50.6% | 72.3% | 40 |
+| vr_room | 3.10% | yes | 1.032 | 8.49 cm | 34.3% | 55.5% | 53 |
 
-For either MuSHRoom room, run inside the image (change `honka` to `vr_room`):
+Other checks.
 
-```sh
-python -m eval.score_mushroom \
-  --dataset /w/data/mushroom/room_datasets/honka \
-  --out /w/runs/w7-honka/mushroom_honka_lidar.json
-# Host equivalent (the image starts in /w/repo):
-ssh -o BatchMode=yes sher@10.1.18.190 \
-  '/home/sher/namma-space/bin/nsdocker ns-w7-honka-lidar namma-space-gpu:0.2 \
-   python3 -m eval.score_mushroom --dataset /w/data/mushroom/room_datasets/honka \
-   --out /w/runs/w7-honka/mushroom_honka_lidar.json'
-```
+| Check | Result |
+|---|---|
+| Mip-NeRF 360 room, held-out PSNR | ours 32.48 dB, published 31.36 dB, difference +1.12 dB |
+| Mip-NeRF 360 room, SSIM / LPIPS (AlexNet) | 0.938 / 0.132 |
+| Synthetic room, median wall error | 0.0036 m (pass limit 0.02 m, status pass) |
+<!-- table:end -->
 
-The script reads `iphone/long_capture/transformations.json`, converts its
-OpenGL camera convention to OpenCV with `diag(1,-1,-1)`, converts LiDAR PNG
-millimetres to metres, and uses bounded Open3D
-`UniformTSDFVolume(voxel_size=.02, sdf_trunc=.08, depth_trunc=5.0)`. The volume
-is a padded cube around the valid world-space depth envelope and is capped at
-512³ voxels; the chosen origin and effective resolution are recorded in the
-run metadata. `ScalableTSDFVolume` and the deterministic point-surface path
-remain recorded fallbacks. It applies `icp_iphone.json` to score against
-`gt_mesh.ply`; accuracy is ours to GT, completeness is GT to ours, and F-score
-uses a 5 cm threshold.
+Figures: `mushroom_geometry.png`, `mushroom_scale.png`, `mip360_room.png`, plus one card per JSON.
 
-The JSON contains both raw and standard cropped scores, with 100,000 uniformly
-sampled surface points per method. The headline protocol is `score.cropped`:
-predicted points are kept inside the Faro mesh bounding box grown by 5 cm;
-ground-truth points remain unchanged for completeness. Uniform honka raw is
-accuracy 0.211129 m, completeness 0.031016 m, F@5 cm 0.753561; cropped is
-0.118976 m, 0.031017 m, 0.802593. Uniform vr_room raw is 0.387771 m,
-0.038899 m, 0.657611; cropped is 0.170712 m, 0.038899 m, 0.736644. The old
-point-surface scores remain under `fallback_point_surface` in each JSON. Use
-the cropped protocol for every method.
+## Read this beside the geometry and depth numbers
 
-## J3 phone-only / J4 phone-only VR room
+Before scoring, we fitted our COLMAP camera centres to the dataset's camera path with a robust 7-DoF similarity (Umeyama: rotation, offset and scale; `score_phone_only.py`). The fit scale is in the table (`scale.fit_scale_aligned_to_dataset`). The fit removes our own scale error from the geometry and depth scores. So those scores are a best case for shape. They are not what the pipeline delivers end to end.
 
-After `rh-honka` or `rh-vrroom` has a final PLY and held-out poses, run:
+Our scale error without the fit is the "Scale error" column: it comes from camera height alone and is measured before any fit. The "True scale in 68% interval" column says whether the dataset's true scale fell inside the interval the pipeline reported.
 
-```sh
-python -m eval.score_phone_only \
-  --run /w/runs/rh-honka --dataset /w/data/mushroom/room_datasets/honka \
-  --out /w/runs/w7-honka/mushroom_honka_ours.json
-python -m eval.score_phone_only \
-  --run /w/runs/rh-vrroom --dataset /w/data/mushroom/room_datasets/vr_room \
-  --out /w/runs/w7-vrroom/mushroom_vr_room_ours.json
-python -m eval.score_mushroom \
-  --dataset /w/data/mushroom/room_datasets/vr_room \
-  --out /w/runs/w7-vrroom/mushroom_vr_room_lidar.json
-```
+The LiDAR baseline uses the dataset's own poses and no scale fit.
 
-The phone-only commands are run through
-`nsdocker --gpu ns-w7-j3-honka namma-space-gpu:0.2` and
-`nsdocker --gpu ns-w7-j4-vr namma-space-gpu:0.2`, respectively; the exact
-host paths and output names above are the recorded commands.
+## Not claimed
 
-The scorer renders every matched training camera and held-out frames every 8th
-in gsplat's sorted-name convention.  It reports fit RMSE, `s_ours`, `s_true`,
-`abs(s_ours/s_true - 1) * 100`, the align 68% interval and containment, depth
-error against LiDAR, and raw/cropped Faro geometry.  `score.cropped` is the
-headline geometry protocol shared with J2.
+- No claim that phone-only geometry is close to LiDAR. `docs/claims.md` (row 2) sets a rule: ours / LiDAR F@5cm must reach 80%. Ours reaches the ratios in the table. The rule fails in both rooms.
+- `vr_room` is not an unseen room. Three code fixes came from working on it.
+- No claim of photo-like quality without held-out image scores beside it.
+- Browser speed, splat counts and file sizes are not in this folder. They sit in each run's `90_verify/verify.json`.
+- The Mip-NeRF 360 result shows our trainer matches the published figure. It says nothing about phone video.
 
-Depth PNGs are resized nearest-neighbour from 738×994 to the undistorted
-COLMAP raster (735×990 for honka and 735×990 for vr_room) before pixelwise
-comparison; no depth interpolation or invalid-pixel fill is used.
+## How each result was made
 
-The tyrone host had no usable NVIDIA driver for these two renderer runs. The
-CPU retry failed inside gsplat's CUDA rasterizer, so both JSON files are
-`status: "not_run"`; their prior point-surface results are retained under
-`fallback_point_surface` and are not new Uniform headline numbers.
+Both methods fuse depth with Open3D `UniformTSDFVolume` (voxel 2 cm, truncation 8 cm, depth cap 5 m). Both are scored on the same crop: predicted points inside the Faro mesh bounding box grown by 5 cm. Faro points stay whole, so completeness covers the full scan. Each surface is sampled with 100,000 points. The dataset's ICP transform places both in the Faro frame.
 
-* `mushroom_honka_lidar.json`: Uniform cropped accuracy 0.118976 m,
-  completeness 0.031017 m, F@5 cm 0.802593.
-* `mushroom_vr_room_lidar.json`: Uniform cropped accuracy 0.170712 m,
-  completeness 0.038899 m, F@5 cm 0.736644.
-Numbers from the smoke model are labelled `smoke model` and are not metric
-claims.  If a rehearsal run is absent or a GPU slot is unavailable, its JSON
-must contain `status: "not_run"` and the reason instead of an invented value.
+- Phone-only (`mushroom_*_ours.json`): the pipeline's cleaned splat file is rendered to depth at our cameras and fused. Depth error uses every eighth view as held out. Commands, as recorded in the JSON `command` field (paths are inside the GPU container):
+  `python -m eval.score_phone_only --run /w/runs/rh-honka --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-honka/mushroom_honka_ours.json`
+  and the same with `rh-vrroom`, `vr_room`, `w7-vrroom`.
+- iPhone LiDAR fusion (`mushroom_*_lidar.json`): the dataset's iPhone depth and poses, every view (stride 1).
+  `python -m eval.score_mushroom --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-honka/mushroom_honka_lidar_uniform2.json`
+  The `command` field names `*_lidar_uniform2.json`. The shipped files are `*_lidar.json`. The names differ; the field is a slip in the file name.
+- Mip-NeRF 360 room (`mip360_room.json`): the gsplat trainer with MCMC defaults, 30,000 steps, images at half size, every eighth image held out. The JSON holds the exact command. The JSON does not name the source of the published figure.
+- Synthetic room (`synthetic_room.json`): four exact depth views of a box room, fused with the same settings. It checks the fusion code. The median distance from mesh vertices to the true walls must stay under the pass limit. It is run as `python -m eval.synthetic_room --out eval/results/synthetic_room.json` (the JSON stores no command).
 
-## J5 synthetic TSDF check
+## Superseded and known flaws
 
-The unit fixture in `test/unit/geometry/test_tsdf.py` validates projection and
-free-space semantics without Open3D.  The full synthetic-room acceptance run
-is performed in the GPU image and records the median wall distance; the gate is
-`<= 0.02 m`.  The measured four-view box result is
-`results/synthetic_room.json` (Uniform, 8,558 vertices, median 0.003638 m, pass).
+- Zip-NeRF Berlin (J6, a multi-room SfM stress test) was never run. Early `not_run` stub files were removed on 30 Oct; the `*_ours` and `*_lidar` files hold the MuSHRoom results.
+- `fallback_point_surface` inside the MuSHRoom JSONs holds the older scores from a point-surface fallback, used when Open3D fusion returned an empty mesh. They are superseded. Use the headline `geometry.cropped` and `score.cropped` values only.
+- The four MuSHRoom JSONs show `"git": "unknown"`. Cause: `score_phone_only.py` reads the commit only when `run/../.git` exists, and `score_mushroom.py` hides a failed `git rev-parse` inside the container. The scores were made just before commit `3346c14`, which added these files. `mip360_room.json` records its commit.
+- Container images: the Mip-NeRF 360 run used `namma-space-gpu:0.1`; the MuSHRoom scoring used `namma-space-gpu:0.2`. The JSONs do not record the image.
+- The accuracy mean sits well above its median; the medians are in the JSON and on the cards.
+- Earlier PNGs said "tyrone had no usable NVIDIA driver" and showed fallback scores. They are replaced.
+
+## Files in `results/`
+
+- `mushroom_honka_ours.json`, `.png`: phone-only scores, honka.
+- `mushroom_vr_room_ours.json`, `.png`: phone-only scores, vr_room.
+- `mushroom_honka_lidar.json`, `.png`: iPhone LiDAR fusion baseline, honka.
+- `mushroom_vr_room_lidar.json`, `.png`: iPhone LiDAR fusion baseline, vr_room.
+- `mushroom_geometry.png`: ours against LiDAR, both rooms (drawn from the four JSONs above).
+- `mushroom_scale.png`: scale error and depth error, both rooms (from the two `_ours` JSONs).
+- `mip360_room.json`, `.png`: trainer check on Mip-NeRF 360 room.
+- `synthetic_room.json`, `.png`: fusion code check.

@@ -1,13 +1,20 @@
-# Namma Space demo storyboard (target 4:20)
+# Storyboard
 
-| Time | Shot | Narration |
-|---|---|---|
-| 0:00–0:20 | Browser walk in the twin; wall stop, minimap, URL | “Built from one phone video. Running in a browser. Nothing to install.” |
-| 0:20–0:35 | Title card and four measured values | Positioning sentence; values read from `report.json`. |
-| 0:35–1:20 | Phone settings, capture clip at four-times speed, pass labels, `ns check` | The phone stays on one lens. The path covers walls, corners, floor and the door. The check catches blur and exposure problems. |
-| 1:20–2:20 | One command; frame sheet, camera path, training comparison, levelling, scale interval, clean-up and grid | “The run keeps each stage in a record. The twin uses the splat for appearance and a light grid for walking.” |
-| 2:20–3:30 | WASD, wall stop, map jump, reality check, HUD, HD toggle, short phone view | Controls and measured viewer checks. |
-| 3:30–4:00 | Results card, public-room comparison, failure table, licence line | Numbers only, beside the evidence file. |
-| 4:00–4:20 | Limits card and links | “Not built yet: place search, routes, multiple floors and WebXR AR.” |
+Same storyboard for every run. Run `video/build_video.sh <run>`. Spoken text and screen notes: `narration.md`. Length 3:30 to 4:40, asserted by the build.
 
-No music. Burn in captions and ship the `.srt`. Strip location metadata before upload.
+| # | Segment | About | Picture | Source |
+|---|---|---|---|---|
+| 1 | cold | 20 s | First-person walk, key overlay, minimap, wall stop | real viewer recording |
+| 2 | title | 18 s | Title card, scope card (in and out of scope) | slides |
+| 3 | capture | 35 s | Capture routine (setup, three passes), then capture footage | slides + public-room frames at 16 fps, or `video/inputs/<run>/capture_clip.mp4` at 4x |
+| 4 | pipeline | 45 s | `./ns run video.mp4`, architecture with measured times, stage numbers | slides from report.json and timings.json |
+| 5a | walk | 13 s | WASD and mouse, wall stop | real viewer recording |
+| 5b | map | 7 s | M, click the map, jump | real viewer recording |
+| 5c | reality | 13 s | C: held-out photo against render, two pairs | real viewer recording |
+| 5d | bench | 16 s | T: tour benchmark (cut to 10 s), result card | real viewer recording |
+| 5e | measure | 8 s | K: two points, scale interval; H: stats panel | real viewer recording |
+| 5f | route | 11 s | `/` search, G route, Space follow, "Round 2 preview" (title card if the scene has no places) | real viewer recording |
+| 6 | results | 49 s | Scale, geometry vs Faro, trainer parity, viewer numbers | slides from eval/results, report.json, verify.json |
+| 7 | limits | 16 s | Limits, links with placeholders | slides |
+
+Segment length is the speech length plus 0.6 s, never shorter than its footage. Captions come from the same text and timing as the audio.

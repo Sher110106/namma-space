@@ -1,1 +1,95 @@
-<!doctype html><meta charset="utf-8"><title>Namma Space proof of concept</title><style>@page{size:A4;margin:14mm}body{font:11pt Arial;line-height:1.3;color:#111}h1{font-size:23pt;margin:0 0 4mm}h2{font-size:15pt;border-bottom:2px solid #111;padding-bottom:2mm;margin-top:0}.page{min-height:250mm;break-after:page}.page:last-child{break-after:auto}.box{border:1px solid #888;padding:4mm;margin:4mm 0}.cols{columns:2;column-gap:10mm}li{margin:2mm 0}code{background:#eee;padding:1px 3px}.muted{color:#555}.qr{display:inline-block;border:3px solid #111;padding:3mm;margin-top:2mm;font-weight:bold}</style><section class="page"><h1>Namma Space</h1><p><b>Proof of Concept and Links</b> · Team ${report.name}</p><div class="box"><b>Open the viewer</b><br><a href="${viewer.url}">${viewer.url}</a><br><span class="qr">QR placeholder for this URL</span><br>Mirror: <a href="${viewer.mirror_url}">${viewer.mirror_url}</a><br>Offline bundle: <code>${viewer.offline_zip}</code></div><h2>Judge path</h2><ol><li>Open the link and click once.</li><li>Walk into a wall; the controller stops you.</li><li>Press <b>M</b> and click the minimap to jump.</li><li>Press <b>C</b> for a held-out photo beside the render.</li><li>Press <b>T</b> for the tour; it ends with the machine's frame rate.</li><li>Read the results card.</li></ol><p>The path takes about ${viewer.judge_path_minutes} minutes on a supported browser. It is the same route shown in the demo video.</p><div class="box"><b>Controls</b><br>WASD or arrow keys: walk · mouse drag: look · M: map · C: reality check · T: tour · R: respawn · H: help · Esc: release pointer lock</div><p><b>What this proves:</b> one phone capture, a metric frame, compact SPZ assets, walkable collision and a browser renderer. The run and evaluation records hold the measurements.</p></section><section class="page"><h2>Test notes and links</h2><div class="cols"><p><b>Tested</b><br>${viewer.devices}</p><p><b>Known limits</b><br>One indoor room is the Round One scope. Search, routes, multiple floors and WebXR AR are not built. Very slow or software-only graphics may need the preview or the offline video.</p><p><b>If the link fails</b><br>Open the offline zip with the command in <code>START_HERE.txt</code>. If a browser cannot run WebGL2, use the recorded video and the static result pairs.</p><p><b>Viewer evidence</b><br>Initial frame: ${viewer.first_frame_s}; mean frame rate: ${viewer.fps_mean}; p95 frame time: ${viewer.p95_ms}; standard asset: ${export.sd.mb}.</p></div><h2>Other deliverables</h2><ul><li>Technical abstract: <code>${links.abstract}</code></li><li>Demo video: <code>${links.video}</code> and captions <code>${links.captions}</code></li><li>Repository and tag: <code>${links.repo}</code></li><li>Inputs used: <code>${links.inputs}</code></li><li>Results: <code>${links.results}</code></li><li>Licence table: <code>LICENSES.md</code></li></ul><div class="box"><b>Reproduction</b><br><code>${links.command}</code><br>Input: ${input.files}. Hardware and elapsed stage values are filled from <code>report.json</code> and <code>timings.json</code>.</div><p class="muted">No hosted service reconstructs the room. The product path runs locally; the browser only loads the exported scene.</p></section>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Namma Space: proof of concept</title>
+<style>
+*{box-sizing:border-box}
+body{font:9.6pt/1.32 Helvetica,Arial,sans-serif;color:#161616;margin:0}
+h1{font-size:24pt;margin:0 0 1mm}
+h2{font-size:13.5pt;border-bottom:2px solid #111;padding-bottom:1mm;margin:3mm 0 2mm}
+h3{font-size:10pt;margin:3mm 0 1mm}
+p{margin:0 0 2mm}ul,ol{margin:0 0 2mm;padding-left:5mm}li{margin:0 0 1.2mm}
+.page{height:272mm;break-after:page;overflow:hidden}.page:last-child{break-after:auto}
+.box{border:1px solid #777;padding:2.5mm 3.5mm;margin:2.5mm 0;background:#fafafa}
+.banner{background:#fff3cd;border:1px solid #c9a227;padding:1.5mm 3mm;margin:0 0 3mm;font-weight:bold}
+.slot{background:#ffe1a8;border:1px dashed #a35c00;padding:0 1.2mm;font-weight:bold}
+.big{font-size:12pt}
+table{border-collapse:collapse;width:100%;font-size:8.6pt;margin:1mm 0 2mm}
+th,td{border:1px solid #aaa;padding:1mm 1.6mm;text-align:left;vertical-align:top}th{background:#ececec}
+code{font-size:8.6pt;background:#eee;padding:0 .8mm}kbd{font:bold 8.4pt monospace;border:1px solid #888;border-radius:2px;padding:0 1.2mm;background:#f3f3f3}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:5mm}.muted{color:#555}.small{font-size:8pt}
+</style></head><body>
+
+<section class="page">
+<h1>Namma Space</h1>
+<p><b>Proof of concept and links</b> &middot; Techfest IIT Bombay, Round 1 &middot; Team ID: ${team_id_html}</p>
+<div class="banner">${dryrun_banner}</div>
+<p>One phone video becomes a level 3D scene of an indoor room that you walk through in a browser. Scene shown here: <b>${scene_title}</b>. Source: ${provenance}.</p>
+<div class="box big"><b>Web viewer (free roaming):</b> ${viewer_link_html}<br>
+<span class="small muted">${viewer_pending} If the link fails, use the offline folder below, or the video.</span><br>
+<span class="small">Offline copy: <code>runs/${run}/80_web/</code> (also packaged as <code>05_Viewer_Offline.zip</code>). Run <code>python3 -m http.server 8000</code> in that folder and open <code>http://localhost:8000/?scene=${run}</code>.</span></div>
+
+<h2>The five-minute judge path</h2>
+<ol>
+<li><b>Open the link and click once</b> (the start card has a button). On the test machine the scene was on screen after ${dev_first}: a ${preview_mb} MB preview loads before the full ${sd_mb} MB scene.</li>
+<li><b>Walk.</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows, mouse to look. Walk into a wall: you stop and slide along it. On a phone: left thumb walks, right thumb looks.</li>
+<li><b>Map.</b> Press <kbd>M</kbd> and click the map to jump to that spot.</li>
+<li><b>Reality check.</b> Press <kbd>C</kbd> and drag the slider between a held-out photo (never used in training) and our render at the same pose. The bar shows that pose's PSNR.</li>
+<li><b>Tour benchmark.</b> Press <kbd>T</kbd> for a fixed walk (60 s). A result card then shows frames per second, p95 frame time, splats, download size and your GPU. <b>Copy result</b> puts the numbers on your clipboard: please send us yours.</li>
+<li><b>Scale.</b> The stats badge (<kbd>H</kbd>) shows the scale estimate and its 68 % range (${scale_interval}; ${scale_status}). Press <kbd>K</kbd> and click two points to measure; the card shows the interval.</li>
+<li><b>Round 2 preview.</b> ${places_note} Press <kbd>/</kbd> to search, then Jump (<kbd>J</kbd>), Route (<kbd>G</kbd>) or Follow (<kbd>Space</kbd>).</li></ol>
+
+<h2>Controls</h2>
+<table><tr><th>Key</th><th>Does</th><th>Key</th><th>Does</th></tr>
+<tr><td><kbd>W A S D</kbd> / arrows</td><td>walk</td><td><kbd>M</kbd></td><td>map; click to jump</td></tr>
+<tr><td><kbd>Shift</kbd></td><td>run</td><td><kbd>C</kbd></td><td>reality check (photo vs render)</td></tr>
+<tr><td>mouse</td><td>look (click the scene to capture, <kbd>Esc</kbd> to release)</td><td><kbd>T</kbd></td><td>tour benchmark</td></tr>
+<tr><td><kbd>R</kbd></td><td>respawn</td><td><kbd>K</kbd></td><td>measure between two points</td></tr>
+<tr><td><kbd>1</kbd>-<kbd>5</kbd></td><td>saved views</td><td><kbd>F</kbd></td><td>fly mode (stays inside the room)</td></tr>
+<tr><td><kbd>?</kbd></td><td>help</td><td><kbd>H</kbd></td><td>stats panel</td></tr>
+<tr><td><kbd>L</kbd></td><td>copy a link to this spot</td><td><kbd>/</kbd></td><td>search places (Round 2 preview)</td></tr></table>
+<p class="small">URL flags: <code>?scene=NAME</code>, <code>?keys=1</code> (show keys on screen), <code>?bench=1</code> (start the tour), <code>?q=low</code> (start at low quality), <code>?pose=x,y,z,yaw,pitch</code>.</p>
+
+<h2>Tested browsers and devices</h2>
+<table><tr><th>Device</th><th>Result</th></tr>
+<tr><td>${dev_name}</td><td>${dev_fps} fps, p95 ${dev_p95}, scene on screen after ${dev_first}, ${dev_splats} splats, ${dev_mb}</td></tr></table>
+<p><b>This is the only device we measured.</b> Safari, Firefox, phone browsers and integrated graphics are unverified. The viewer lowers its pixel ratio on weak GPUs and falls back to the preview scene on very slow ones, so a slow machine looks softer instead of stalling. The 60 fps figure is the display cap of the test machine: it shows no dropped frames, not spare speed.</p>
+
+</section>
+
+<section class="page">
+<h2>If the link does not work</h2>
+<ol><li>Open the offline folder as above (needs only Python 3 and a browser with WebGL2).</li>
+<li>Watch the demo video: ${video_link_html}</li>
+<li>Read the technical abstract: it holds the same numbers with their sources.</li></ol>
+<h2>What we measured, and where</h2>
+<table><tr><th>Evidence</th><th>Value</th><th>Source</th></tr>
+<tr><td>Held-out image scores, this scene</td><td>${psnr} dB PSNR, ${ssim} SSIM, ${lpips} LPIPS (${heldout_n} photos never used in training)</td><td><code>report.json</code></td></tr>
+<tr><td>Viewer, scripted walk and tour</td><td>${dev_fps} fps and ${bench_fps} fps; p95 ${dev_p95}; scene on screen after ${dev_first}</td><td><code>90_verify/verify.json</code></td></tr>
+<tr><td>Wall test</td><td>${walls_n} random walks, ${pushes_n} wall pushes, ${penetrations} positions in blocked cells</td><td><code>report.json</code></td></tr>
+<tr><td>Scale check, public rooms</td><td>${honka_scale_err} (honka), ${vr_scale_err} (vr_room); true scale inside the 68 % interval in both</td><td><code>eval/results/</code></td></tr>
+<tr><td>Geometry vs Faro laser scan, honka</td><td>F@5cm ${honka_f_ours} phone only, ${honka_f_lidar} iPhone LiDAR fusion (same fusion and crop; our camera path was fitted to the dataset's path before scoring, including scale)</td><td><code>eval/results/</code></td></tr></table>
+<h2>Links to every item</h2>
+<table><tr><th>Item</th><th>Where</th></tr>
+<tr><td>Web viewer</td><td>${viewer_link_html}</td></tr>
+<tr><td>Demo video (3-5 min) and captions</td><td>${video_link_html}; files <code>video/out/</code></td></tr>
+<tr><td>Technical abstract</td><td><code>01_Technical_Abstract.pdf</code> (this package)</td></tr>
+<tr><td>Code repository</td><td>${repo_link_html}; setup in <code>README.md</code> and <code>test/README.md</code>; sample data in <code>test/data/</code></td></tr>
+<tr><td>Capture SOP</td><td><code>docs/SOP_card.pdf</code> (one page), <code>docs/SOP.md</code> (reasons)</td></tr>
+<tr><td>Run records and results</td><td><code>runs/${run}/report.html</code>, <code>report.json</code>, <code>timings.json</code>, <code>90_verify/verify.json</code>, <code>eval/results/*.json</code></td></tr>
+<tr><td>Licences and credits</td><td><code>LICENSES.md</code></td></tr></table>
+
+<h2>Reproduce</h2>
+<div class="box"><code>./ns run video.mp4 --name ${run}</code> &nbsp; runs every stage and writes the viewer folder.<br>
+<code>./ns test all</code> &nbsp; runs the unit and end-to-end tests.<br>
+<code>docs/tools/build_docs.sh ${run}</code> &nbsp; rebuilds the abstract and this PDF from the run record.<br>
+Details, hardware and the smoke test: <code>README.md</code>, <code>test/README.md</code>. This run: ${t_total_min} in all stages (${t_gpu_min} in GPU stages), commit ${git}.</div>
+
+<h2>Known limits</h2>
+<ul>
+<li>Scale is an estimate with a 68 % interval; for this scene it is ${scale_status}.</li>
+<li>Phone-only geometry scored below iPhone LiDAR fusion on both public rooms (F@5cm ${honka_f_ours} vs ${honka_f_lidar}; ${vr_f_ours} vs ${vr_f_lidar}).</li>
+<li>Search, routes and follow are a Round 2 preview over hand-placed places. Not built: multiple floors, WebXR AR, plan registration.</li>
+<li>Measured on one Apple M1 in headless Chrome. Real pointer lock, Safari, Firefox and phones were not tested; drag-to-look works where pointer lock is blocked.</li>
+<li>Ceilings and close-up walls look soft in places; the reality check shows the pairs, good and poor.</li></ul>
+<p class="muted small">Team ID: ${team_id_html}</p>
+</section>
+</body></html>
