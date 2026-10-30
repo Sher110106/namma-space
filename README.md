@@ -14,19 +14,19 @@ Namma Space turns an ordinary indoor phone video into a level 3D Gaussian-splat 
 ## Results
 
 <!-- results:start -->
-Measured on `rh-honka` (a public room; the final entry uses our own room, `room`). Sources: `runs/rh-honka/report.json`, `timings.json`, `90_verify/verify.json`, `eval/results/*.json`.
+Measured on `fix-honka` (a public room; the final entry uses our own room, `room`). Sources: `runs/fix-honka/report.json`, `timings.json`, `90_verify/verify.json`, `eval/results/*.json`.
 
 | What | Value |
 |---|---|
-| Scene | MuSHRoom honka (public test room) (MuSHRoom honka, iPhone long capture, 335 frames) |
-| Held-out photos, PSNR / SSIM / LPIPS | 21.35 dB / 0.812 / 0.225 (8 photos never used in training) |
-| Scene size | 629,993 splats, 16.1 MB (plus a 3.4 MB preview) |
-| Walk in the browser | 59.4 fps, p95 16.7 ms, on screen after 0.60 s (one Apple M1, headless Chrome; other hardware unverified) |
-| Run time | 107 min in all stages, 106 min of it in GPU stages (shared RTX A6000) |
+| Scene | MuSHRoom honka (public test room) |
+| Held-out photos, PSNR / SSIM / LPIPS | 21.51 dB / 0.822 / 0.220 (8 photos never used in training) |
+| Scene size | 611,196 splats, 13.3 MB (plus a 3.4 MB preview) |
+| Walk in the browser | 60.0 fps, p95 16.7 ms, on screen after 0.32 s (one Apple M1, headless Chrome; other hardware unverified) |
+| Run time | 60 min in all stages, 60 min of it in GPU stages (shared RTX A6000) |
 | Scale | ±13 % (68 % interval); estimated, not checked by tape |
 | Walls | 200 random walks and 16 pushes: 0 positions in blocked cells |
-| Scale check, two public rooms | 3.3 % (honka), 3.1 % (vr_room) automatic error; true scale inside the 68 % interval in both |
-| Geometry vs Faro laser scan, F@5cm | honka 0.63 phone only vs 0.80 iPhone LiDAR fusion; vr_room 0.37 vs 0.74 (same fusion and crop; our camera path was fitted to the dataset path first, scale included) |
+| Scale check, two public rooms | 4.3 % (honka), 3.1 % (vr_room) automatic error; true scale inside the 68 % interval in both |
+| Geometry vs Faro laser scan, F@5cm | honka 0.52 phone only vs 0.80 iPhone LiDAR fusion; vr_room 0.40 vs 0.74 (same fusion and crop; our camera path was fitted to the dataset path first, scale included) |
 | Trainer check, Mip-NeRF 360 room | 32.48 dB (published 31.36 dB) |
 <!-- results:end -->
 

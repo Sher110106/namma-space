@@ -11,17 +11,17 @@ Geometry against the Faro scan (cropped). Ours is scored after the 7-DoF fit.
 
 | Room | Method | F@5cm | Precision | Recall | Accuracy (m) | Completeness (m) | F@5cm ours / LiDAR |
 |---|---|---:|---:|---:|---:|---:|---:|
-| honka | Phone-only (ours) | 0.630 | 0.564 | 0.713 | 0.099 | 0.048 | 78.5% |
+| honka | Phone-only (ours) | 0.519 | 0.460 | 0.594 | 0.113 | 0.057 | 64.6% |
 | honka | iPhone LiDAR fusion | 0.803 | 0.723 | 0.902 | 0.119 | 0.031 |  |
-| vr_room | Phone-only (ours) | 0.367 | 0.301 | 0.472 | 0.217 | 0.082 | 49.9% |
+| vr_room | Phone-only (ours) | 0.401 | 0.336 | 0.499 | 0.215 | 0.091 | 54.5% |
 | vr_room | iPhone LiDAR fusion | 0.737 | 0.657 | 0.838 | 0.171 | 0.039 |  |
 
 Scale (automatic, before the fit) and depth against iPhone LiDAR depth (phone-only).
 
 | Room | Scale error | True scale in 68% interval | Fit scale | Depth median error | Within 5 cm | Within 10 cm | Held-out views |
 |---|---:|:---:|---:|---:|---:|---:|---:|
-| honka | 3.26% | yes | 0.968 | 4.91 cm | 50.6% | 72.3% | 40 |
-| vr_room | 3.10% | yes | 1.032 | 8.49 cm | 34.3% | 55.5% | 53 |
+| honka | 4.29% | yes | 0.959 | 6.08 cm | 43.9% | 65.6% | 40 |
+| vr_room | 3.10% | yes | 1.032 | 6.77 cm | 41.1% | 61.7% | 53 |
 
 Other checks.
 
@@ -30,6 +30,8 @@ Other checks.
 | Mip-NeRF 360 room, held-out PSNR | ours 32.48 dB, published 31.36 dB, difference +1.12 dB |
 | Mip-NeRF 360 room, SSIM / LPIPS (AlexNet) | 0.938 / 0.132 |
 | Synthetic room, median wall error | 0.0036 m (pass limit 0.02 m, status pass) |
+
+These rows score the current default pipeline (variant r0) on runs fix-honka and fix-vrroom (30 Oct, after the review fixes). An earlier honka run (rh-honka, older code) shipped the depth-loss variant r1 and scored F@5cm 0.630 (78.5% of LiDAR), median depth error 4.91 cm and scale error 3.26%: depth loss improves geometry at equal image quality. r1 is available with `--variants r0,r1`; it crashed once on vr_room (CUDA assert), in which case the runner ships r0.
 <!-- table:end -->
 
 Figures: `mushroom_geometry.png`, `mushroom_scale.png`, `mip360_room.png`, plus one card per JSON.

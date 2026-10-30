@@ -3,46 +3,46 @@
   "name": "mushroom_honka_ours",
   "kind": "mushroom_phone_only",
   "status": "complete",
-  "run": "/w/runs/rh-honka",
+  "run": "/w/runs/fix-honka",
   "dataset": "/w/data/mushroom/room_datasets/honka",
-  "ply": "/w/runs/rh-honka/60_export/clean.ply",
+  "ply": "/w/runs/fix-honka/60_export/clean.ply",
   "views": 316,
   "matched_views": 316,
   "pose_source": "40_align/sparse/0 COLMAP cameras matched by basename to MuSHRoom transformations.json",
   "pose_convention": "COLMAP/OpenCV c2w; MuSHRoom OpenGL c2w centres matched, depth scalar compared in camera rays",
   "scale": {
-    "s_ours_m_per_sfm_unit": 0.5257433793132155,
-    "s_true_m_per_raw_sfm_unit": 0.5091266260753629,
-    "fit_scale_aligned_to_dataset": 0.9683937945931734,
-    "fit_rmse_m_all": 0.051374124433759494,
-    "fit_rmse_m_inliers": 0.01024775913809348,
+    "s_ours_m_per_sfm_unit": 0.49190913572785666,
+    "s_true_m_per_raw_sfm_unit": 0.4716847467139428,
+    "fit_scale_aligned_to_dataset": 0.9588859251739882,
+    "fit_rmse_m_all": 0.05484813472325708,
+    "fit_rmse_m_inliers": 0.010387682258974636,
     "fit_n": 221,
     "matched_n": 316,
-    "automatic_error_pct": 3.2637761191049774,
+    "automatic_error_pct": 4.287691971133234,
     "automatic_error_definition": "abs(s_ours/s_true - 1) * 100",
     "interval_68_m_per_raw_sfm_unit": [
-      0.46629254758163124,
-      0.592774004914352
+      0.4362842654849101,
+      0.5546260017962902
     ],
     "true_inside_interval_68": true,
     "similarity_matrix": [
       [
-        0.36459706044966195,
-        -0.01695954114764438,
-        0.8969770893852812,
-        -1.9986244041482457
+        -0.3633771528721088,
+        0.004464264157673534,
+        -0.8873552460051526,
+        -2.002242278584861
       ],
       [
-        0.8968984790948853,
-        0.02923465448005529,
-        -0.36401235498438567,
-        -1.1775106023175033
+        -0.8871038342755445,
+        0.02150025753037221,
+        0.3633823656102888,
+        -1.1699381974086585
       ],
       [
-        -0.020703698107151326,
-        0.9678038284425508,
-        0.026714189922113968,
-        -1.2705904454582262
+        0.02158817919514891,
+        0.9586344594100679,
+        -0.004017617127098519,
+        -1.2570081798121626
       ],
       [
         0.0,
@@ -55,33 +55,33 @@
   "depth_vs_lidar": {
     "heldout_every": 8,
     "heldout_views": 40,
-    "pixels": 28617551,
-    "median_abs_error_cm": 4.912543296813965,
-    "within_5cm_frac": 0.5056245378928477,
-    "within_10cm_frac": 0.7228137376255571,
-    "fit_scale_applied": 0.9683937945931734
+    "pixels": 28507650,
+    "median_abs_error_cm": 6.0799241065979,
+    "within_5cm_frac": 0.4392670739257708,
+    "within_10cm_frac": 0.6561901103738821,
+    "fit_scale_applied": 0.9588859251739882
   },
   "geometry": {
     "raw": {
-      "accuracy_m": 0.19737448031205582,
-      "completeness_m": 0.04717824740245738,
-      "accuracy_median_m": 0.0568607781005228,
-      "completeness_median_m": 0.03558454860885464,
-      "f_score_5cm": 0.5596582425616031,
-      "precision_5cm": 0.46057,
-      "recall_5cm": 0.71307,
+      "accuracy_m": 0.19569036881334906,
+      "completeness_m": 0.05630612862789575,
+      "accuracy_median_m": 0.07912247241636639,
+      "completeness_median_m": 0.04254758381723245,
+      "f_score_5cm": 0.45099301193496855,
+      "precision_5cm": 0.36336,
+      "recall_5cm": 0.59433,
       "n_ours": 100000,
       "n_gt": 100000
     },
     "cropped": {
-      "accuracy_m": 0.09866476033893683,
-      "completeness_m": 0.047827649540691415,
-      "accuracy_median_m": 0.04251617985498686,
-      "completeness_median_m": 0.03558454860885464,
-      "f_score_5cm": 0.6300472567197449,
-      "precision_5cm": 0.5643410282801549,
-      "recall_5cm": 0.71307,
-      "n_ours": 81612,
+      "accuracy_m": 0.11254122424591148,
+      "completeness_m": 0.05686666764726977,
+      "accuracy_median_m": 0.05552946998244116,
+      "completeness_median_m": 0.04254758381723245,
+      "f_score_5cm": 0.5186679948128697,
+      "precision_5cm": 0.4600949667616334,
+      "recall_5cm": 0.59433,
+      "n_ours": 78975,
       "n_gt": 100000
     },
     "surface_sampling": {
@@ -92,16 +92,16 @@
       "kind": "predicted_inside_gt_bbox_grown",
       "grow_m": 0.05,
       "gt_bbox_min_m": [
-        -4.111082186689,
-        -3.368897225241999,
-        -0.03647189350958873
+        -4.110974426332027,
+        -3.369093540263465,
+        -0.03621830301088265
       ],
       "gt_bbox_max_m": [
-        2.275900915605902,
-        3.992885031039555,
-        2.4994196722709674
+        2.2750128404915557,
+        3.9923686545928927,
+        2.506975174712129
       ],
-      "n_removed": 18388
+      "n_removed": 21025
     }
   },
   "headline_protocol": "cropped predicted points inside Faro mesh bbox grown by 5 cm",
@@ -111,66 +111,23 @@
     "sdf_trunc_m": 0.08,
     "depth_trunc_m": 5.0,
     "origin_m": [
-      -3.4803430103758215,
-      -3.8742369022180907,
-      -5.3302775884702775
+      -6.103199943953506,
+      -3.6288501648491938,
+      -4.391609529295038
     ],
-    "length_m": 9.700000000000001,
-    "resolution": 485,
-    "effective_voxel_size_m": 0.020000000000000004,
+    "length_m": 9.64,
+    "resolution": 482,
+    "effective_voxel_size_m": 0.02,
     "method": "UniformTSDFVolume"
   },
   "voxel_size_m": 0.02,
   "sdf_trunc_m": 0.08,
   "depth_trunc_m": 5.0,
   "git": "unknown",
-  "date": "2026-10-30T07:28:57+00:00",
+  "date": "2026-10-30T12:03:27+00:00",
   "image_digests": {
     "dataset": "2826c176dedb4898476b663b0a533eca15c784d637274a83ab1ecdedef6ef43f",
     "gt_mesh": "90b9471ddfdfcfc77d287f13d6eb582794fb9748386b238b5cfdee90b1d3c978"
   },
-  "command": "python -m eval.score_phone_only --run /w/runs/rh-honka --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-honka/mushroom_honka_ours.json",
-  "fallback_point_surface": {
-    "label": "previous point-surface fallback geometry scores",
-    "score": {
-      "raw": {
-        "accuracy_m": 0.3229722063883797,
-        "completeness_m": 0.03458872078530905,
-        "accuracy_median_m": 0.13893474903842798,
-        "completeness_median_m": 0.02703600169009769,
-        "f_score_5cm": 0.4278731205311853,
-        "precision_5cm": 0.28778617489221714,
-        "recall_5cm": 0.8336940505338336,
-        "n_ours": 297589,
-        "n_gt": 5026098
-      },
-      "cropped": {
-        "accuracy_m": 0.18881078358930461,
-        "completeness_m": 0.03461669709066498,
-        "accuracy_median_m": 0.0871825431734323,
-        "completeness_median_m": 0.02703600169009769,
-        "f_score_5cm": 0.5148117109829825,
-        "precision_5cm": 0.37237918829841815,
-        "recall_5cm": 0.8336940505338336,
-        "n_ours": 229986,
-        "n_gt": 5026098
-      },
-      "crop": {
-        "kind": "predicted_inside_gt_bbox_grown",
-        "grow_m": 0.05,
-        "gt_bbox_min_m": [
-          -4.112767505645752,
-          -3.369944620132446,
-          -0.03710751533508301
-        ],
-        "gt_bbox_max_m": [
-          2.2762167930603026,
-          3.9936376094818113,
-          2.511585998535156
-        ],
-        "n_removed": 67603
-      }
-    },
-    "fusion": "Open3D ScalableTSDFVolume attempted; pinned Open3D 0.20 returned zero vertices in the synthetic probe, so deterministic point-surface fallback was used"
-  }
+  "command": "python -m eval.score_phone_only --run /w/runs/fix-honka --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-fixhonka/mushroom_honka_ours.json"
 }
