@@ -1,0 +1,9 @@
+{
+  "schema": "namma-space/eval@1",
+  "name": "mushroom_vr_room",
+  "kind": "phone_only_and_lidar",
+  "status": "not_run",
+  "reason": "rh-vrroom does not exist yet; no VR-room metric is reported",
+  "metrics": null,
+  "date": "2026-10-30T09:30:00+05:30"
+}

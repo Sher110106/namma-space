@@ -1,0 +1,13 @@
+{
+  "schema": "namma-space/eval@1",
+  "name": "synthetic_room",
+  "kind": "j5_tsdf",
+  "status": "pass",
+  "views": 4,
+  "vertices": 1978,
+  "median_wall_error_m": 0.013052582740783691,
+  "gate_m": 0.02,
+  "voxel_size_m": 0.02,
+  "sdf_trunc_m": 0.08,
+  "depth_trunc_m": 5.0
+}

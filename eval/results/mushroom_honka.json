@@ -1,0 +1,9 @@
+{
+  "schema": "namma-space/eval@1",
+  "name": "mushroom_honka",
+  "kind": "phone_only_model",
+  "status": "not_run",
+  "reason": "rh-honka train is still running and 60_export does not exist; align status also reports the up-cue gate failure",
+  "metrics": null,
+  "date": "2026-10-30T09:30:00+05:30"
+}
