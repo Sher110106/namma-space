@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -18,8 +19,12 @@ def main(argv=None) -> int:
     ap.add_argument("--classic", action="store_true")
     a = ap.parse_args(argv)
     run = Path(a.run)
-    out = Path(a.out) if a.out else run / "55_geometry"
-    out.mkdir(parents=True, exist_ok=True)
+    final = Path(a.out) if a.out else run / "55_geometry"
+    # Write into a temp dir and rename it at the end (CONTRACTS 2.11), so a crash
+    # never leaves a half-written 55_geometry behind.
+    out = final.with_name(final.name + ".tmp")
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir(parents=True)
     ply = Path(a.ply) if a.ply else _chosen_ply(run)
     if not ply.exists():
         raise FileNotFoundError(f"Gaussian PLY not found: {ply}")
@@ -42,7 +47,10 @@ def main(argv=None) -> int:
               "voxel_size_m": VOXEL_SIZE, "sdf_trunc_m": SDF_TRUNC, "depth_trunc_m": DEPTH_TRUNC,
               "render_mode": "RGB+ED", "alpha_threshold": 0.5,
               "free_space": {"margin_m": 3 * VOXEL_SIZE, "query": "pipeline.geometry.tsdf.free_space_query"}}
+    result["mesh"] = str(final / "mesh.ply")
     (out / "geometry.json").write_text(json.dumps(result, indent=2) + "\n")
+    shutil.rmtree(final, ignore_errors=True)
+    out.rename(final)
     print("NS_RESULT " + json.dumps(result))
     return 0
 
@@ -53,7 +61,9 @@ def _chosen_ply(run: Path) -> Path:
         obj = json.loads((train / "train.json").read_text())
         for key in ("chosen_ply", "final_ply"):
             if obj.get(key):
-                return Path(obj[key])
+                path = Path(obj[key])
+                # train.json stores paths relative to the run dir.
+                return path if path.is_absolute() else run / path
         chosen = obj.get("chosen")
         if chosen:
             v = train / str(chosen) / "ply/point_cloud_29999.ply"
