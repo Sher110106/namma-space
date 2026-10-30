@@ -321,8 +321,11 @@ export function registerGuideTests(T) {
 
   // ------------------------------------------------------------------------------------------------------ R9: start card, help, URL flags
   T("R9", "start card and ? help list the new keys; ?place=&route=1 opens with the route drawn; no console errors in the whole flow", async (c) => {
+    // Place ids come from the scene itself, so the test works on any bundle, not only the fixture.
+    const places = (sceneJson(c.web).scene.places || []).map((p) => p.id);
+    const [first, second] = [places[0], places[1] || places[0]];
     return withBrowser(c.web, async (ctx) => {
-      await openViewer(ctx, "?place=door&route=1", {});
+      await openViewer(ctx, first ? `?place=${encodeURIComponent(first)}&route=1` : "", {});
       const card = await ctx.pg.eval("document.getElementById('start').innerText");
       await ctx.pg.screenshot(path.join(c.shots, "r9_start_card.png"));
       await ctx.pg.eval("document.getElementById('s-go').click()"); await sleep(300);
@@ -330,17 +333,32 @@ export function registerGuideTests(T) {
       const help = await ctx.pg.eval("document.getElementById('help').innerText");
       await ctx.pg.tap("Escape"); await sleep(100);
       const flag = await ctx.pg.eval("({sel: __ns.S.guide.sel && __ns.S.guide.sel.id, route: __ns.S.guide.route && __ns.S.guide.route.ok, on: __ns.S.guide.routeOn, mesh: !!__ns.S.guide.mesh})");
-      await ctx.pg.eval("__ns.S.guide.select('armchair')");
-      const swapped = await ctx.pg.eval("({mesh: !!__ns.S.guide.mesh, route: __ns.S.guide.route, on: __ns.S.guide.routeOn})");      // picking another place clears the old route
+      const errs0 = consoleErrors(ctx.pg);
+      const ui = /Search|search/.test(card) && /round 2 preview/i.test(card) && /measure/i.test(card) && /search rooms/.test(help) && /measure/.test(help) && /J G Space/.test(help) && /places JSON/.test(help);
+      if (!first) {
+        // No places in this scene: the viewer hides the search lines (.needs-places), so check that they are hidden,
+        // that the measure tool is still listed, and that the console is clean. The route part cannot run.
+        const hidden = await ctx.pg.eval("[...document.querySelectorAll('.needs-places')].every((e) => e.hidden)");
+        const okNp = hidden && /measure/i.test(card) && /measure/i.test(help);
+        return { pass: okNp && errs0.length === 0, value: `no places: search lines hidden ${hidden}; measure listed on card and help ${/measure/i.test(card) && /measure/i.test(help)}; ${errs0.length} console errors; route part not run`, metrics: { console_errors: errs0 } };
+      }
+      let swapped = { mesh: false, route: null, on: false };
+      if (second !== first) {
+        await ctx.pg.eval(`__ns.S.guide.select(${JSON.stringify(second)})`);
+        swapped = await ctx.pg.eval("({mesh: !!__ns.S.guide.mesh, route: __ns.S.guide.route, on: __ns.S.guide.routeOn})");      // picking another place clears the old route
+      }
       const errs = consoleErrors(ctx.pg);
-      const hasPlaces = !!(await ctx.pg.eval("__ns.S.guide.places.length"));
-      const pass = /Search|search/.test(card) && /round 2 preview/i.test(card) && /measure/i.test(card) && /search rooms/.test(help) && /measure/.test(help) && /J G Space/.test(help) && /places JSON/.test(help) && flag.sel === "door" && flag.route === true && flag.on && flag.mesh && !swapped.mesh && swapped.route === null && !swapped.on && errs.length === 0 && hasPlaces;
-      return { pass, value: `start card mentions search, Round 2 preview and measure; help lists / J G Space K P; ?place=door&route=1 -> route drawn (${flag.route}); ${errs.length} console errors`, metrics: { console_errors: errs, flag } };
+      const pass = ui && flag.sel === first && flag.route === true && flag.on && flag.mesh && !swapped.mesh && swapped.route === null && !swapped.on && errs.length === 0;
+      return { pass, value: `start card mentions search, Round 2 preview and measure; help lists / J G Space K P; ?place=${first}&route=1 -> route drawn (${flag.route}); ${errs.length} console errors`, metrics: { console_errors: errs, flag } };
     });
   });
 
   // ------------------------------------------------------------------------------------------------------ R10: phone
   T("R10", "phone (390x844 touch): the search button is usable, results are tappable (>= 40 px), card and buttons fit the screen, Route works by touch", async (c) => {
+    const places = sceneJson(c.web).scene.places || [];
+    if (!places.length) return { pass: null, value: "not run: scene has no places" };
+    // Type the start of a real place name from this scene (the fixture used "coffee").
+    const query = String(places[0].name || places[0].id).slice(0, 6).toLowerCase();
     return withBrowser(c.web, async (ctx) => {
       await openViewer(ctx, "", {});
       const b = await ctx.pg.eval("(() => { const r = document.getElementById('s-go').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()");
@@ -351,7 +369,7 @@ export function registerGuideTests(T) {
       await ctx.pg.touch("touchStart", [[btn.x + btn.w / 2, btn.y + btn.h / 2]]); await sleep(60); await ctx.pg.touch("touchEnd", []); await sleep(300);
       const open = await rect("srch");
       const focused = await ctx.pg.eval("document.activeElement && document.activeElement.id");
-      await ctx.pg.type("coffee"); await sleep(200);
+      await ctx.pg.type(query); await sleep(200);
       const row = await ctx.pg.eval("(() => { const li = document.querySelector('#srch-list li[data-id]'); if (!li) return null; const r = li.getBoundingClientRect(); return {x: r.x + r.width / 2, y: r.y + r.height / 2, h: r.height, id: li.dataset.id}; })()");
       await ctx.pg.screenshot(path.join(c.shots, "r10_phone_search.png"));
       await ctx.pg.touch("touchStart", [[row.x, row.y]]); await sleep(60); await ctx.pg.touch("touchEnd", []); await sleep(300);
