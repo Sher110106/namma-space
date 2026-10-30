@@ -94,12 +94,16 @@ export class Page {
     fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, Buffer.from(r.data, "base64")); return file;
   }
   async key(code, down = true) {
+    // code, or "Slash/" for the plain slash key (the map entry for Slash is the "?" key, Shift+/)
     const map = { KeyW: ["w", 87], KeyA: ["a", 65], KeyS: ["s", 83], KeyD: ["d", 68], ArrowUp: ["ArrowUp", 38], ArrowDown: ["ArrowDown", 40],
       ArrowLeft: ["ArrowLeft", 37], ArrowRight: ["ArrowRight", 39], ShiftLeft: ["Shift", 16], Escape: ["Escape", 27], KeyR: ["r", 82],
-      KeyH: ["h", 72], KeyM: ["m", 77], KeyT: ["t", 84], KeyC: ["c", 67], Digit1: ["1", 49], Digit2: ["2", 50], Slash: ["?", 191], KeyF: ["f", 70] };
-    const [key, vk] = map[code] || [code, 0];
-    await this.send("Input.dispatchKeyEvent", { type: down ? "rawKeyDown" : "keyUp", code, key, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
+      KeyH: ["h", 72], KeyM: ["m", 77], KeyT: ["t", 84], KeyC: ["c", 67], Digit1: ["1", 49], Digit2: ["2", 50], Slash: ["?", 191], KeyF: ["f", 70],
+      "Slash/": ["/", 191, "Slash"], Enter: ["Enter", 13], Space: [" ", 32], KeyJ: ["j", 74], KeyG: ["g", 71], KeyK: ["k", 75], KeyP: ["p", 80], Digit3: ["3", 51], Digit4: ["4", 52], Digit5: ["5", 53] };
+    const [key, vk, realCode] = map[code] || [code, 0];
+    await this.send("Input.dispatchKeyEvent", { type: down ? "rawKeyDown" : "keyUp", code: realCode || code, key, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
   }
+  /** Type text into the focused input (no key events). */
+  async type(text) { await this.send("Input.insertText", { text }); }
   async tap(code, ms = 60) { await this.key(code, true); await new Promise((r) => setTimeout(r, ms)); await this.key(code, false); }
   async mouse(type, x, y, extra = {}) { await this.send("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mouseReleased" ? 0 : 1, clickCount: 1, ...extra }); }
   async click(x, y) { await this.mouse("mouseMoved", x, y, { buttons: 0 }); await this.mouse("mousePressed", x, y); await this.mouse("mouseReleased", x, y); }

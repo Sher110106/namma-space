@@ -90,5 +90,78 @@ class Validate(unittest.TestCase):
         self.assertAlmostEqual(math.sqrt(sum(v * v for v in q)), 1.0, places=5)
 
 
+class Places(unittest.TestCase):
+    """--places: merge, defaults, and clear errors (Round 2 preview)."""
+
+    def load(self, obj, grid=None):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "places.json"
+            f.write_text(json.dumps(obj))
+            warns = []
+            return bundle.load_places(f, grid, warns), warns
+
+    def test_list_and_wrapped_forms(self):
+        p = {"name": "Kitchen", "kind": "room", "position": [1, 0, 2], "aliases": ["rasoi"]}
+        a, _ = self.load([p]); b, _ = self.load({"places": [p]})
+        self.assertEqual(a, b); self.assertEqual(a[0]["id"], "kitchen"); self.assertEqual(a[0]["radius_m"], 1.5); self.assertEqual(a[0]["aliases"], ["rasoi"])
+
+    def test_defaults_for_xz_positions_and_alias_string(self):
+        out, _ = self.load([{"name": "Study desk", "position": [2.0, 3.0], "aliases": "work table, laptop desk"}, {"name": "Hall", "kind": "zone", "position": [0, 1]}])
+        self.assertEqual(out[0]["position"], [2.0, 1.0, 3.0]); self.assertEqual(out[0]["kind"], "item"); self.assertEqual(out[0]["radius_m"], 0.4)
+        self.assertEqual(out[0]["aliases"], ["work table", "laptop desk"]); self.assertEqual(out[1]["position"], [0.0, 0.0, 1.0])
+
+    def test_duplicate_names_get_unique_ids(self):
+        out, _ = self.load([{"name": "Chair", "position": [0, 0]}, {"name": "Chair", "position": [1, 0]}, {"name": "Chair!", "position": [2, 0]}])
+        self.assertEqual([p["id"] for p in out], ["chair", "chair-2", "chair-3"])
+
+    def test_errors_are_clear(self):
+        for bad, frag in (([{"name": "", "position": [0, 0]}], "name is required"), ([{"name": "A", "position": [0]}], "position"),
+                          ([{"name": "A", "position": [0, 0], "kind": "pet"}], "kind"), ([{"name": "A", "position": [0, 0], "radius_m": -1}], "radius_m"),
+                          ([{"name": "A", "position": [float("nan"), 0]}], "position"), ({"places": 3}, "expected a JSON list"), (["x"], "not an object")):
+            with self.assertRaises(ValueError) as cm:
+                self.load(bad)
+            self.assertIn(frag, str(cm.exception))
+
+    def test_warns_when_far_from_walkable_floor(self):
+        w, h, data = bundle.png_grey(FIX / "70_grid" / "grid.png")
+        grid = (w, h, data, [-6.75, -6.25], 0.05)
+        _, warns = self.load([{"name": "Far away", "position": [40, 0, 40]}, {"name": "Near", "position": [0.0, 0.0, 0.0]}], grid)
+        self.assertEqual(len(warns), 1); self.assertIn("Far away", warns[0])
+
+    def test_compose_merges_places_and_run_dir_file(self):
+        import argparse
+        import json
+        import tempfile
+        a = argparse.Namespace(title="T", eye_height=None, kind="fixture", source="s", license="l", attribution="", captured="", manual_step=None, places=str(HERE / "fixtures" / "honka_places.json"))
+        scene, _ = bundle.compose_scene(FIX, "t", a, [])
+        self.assertEqual(len(scene["places"]), 8); self.assertEqual(scene["places"][0]["id"], "wall-display")
+        a.places = None
+        scene2, _ = bundle.compose_scene(FIX, "t", a, [])
+        self.assertEqual(scene2["places"], [])                        # no file, no places.json in the fixture run
+        with tempfile.TemporaryDirectory() as d:                      # RUN_DIR/places.json is picked up when --places is absent
+            run = Path(d) / "run"; run.mkdir()
+            for entry in FIX.iterdir():
+                (run / entry.name).symlink_to(entry)
+            (run / "places.json").write_text(json.dumps([{"name": "Sofa", "position": [0, 0, 0]}]))
+            scene3, _ = bundle.compose_scene(run, "t", a, [])
+            self.assertEqual([p["name"] for p in scene3["places"]], ["Sofa"])
+
+    def test_validator_rejects_bad_places(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            web = Path(d) / "web"
+            import shutil
+            shutil.copytree(HERE.parent / "dist", web)
+            sp = web / "scenes" / "honka_demo" / "scene.json"
+            j = json.loads(sp.read_text())
+            self.assertTrue(bundle.validate_web(web)["ok"])
+            j["places"] = j["places"] + [dict(j["places"][0])]       # repeated id
+            sp.write_text(json.dumps(j))
+            self.assertFalse(bundle.validate_web(web)["ok"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

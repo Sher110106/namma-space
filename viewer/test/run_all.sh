@@ -5,6 +5,7 @@
 set -e
 V="$(cd "$(dirname "$0")/.." && pwd)"
 node "$V/test/unit.mjs"
+node "$V/test/nav_unit.mjs" --json "$V/test/last_run/nav_unit.json"
 python3 "$V/test/test_bundle.py"
 if [ -n "$1" ]; then
   RUN="$(cd "$1" && pwd)"
@@ -14,7 +15,7 @@ else
   F="$V/test/fixtures/honka_run"
   python3 "$V/tools/bundle.py" --run "$F" --out "$V/dist" --name honka_demo --title "Honka room (test fixture)" --kind fixture \
     --source "MuSHRoom honka, iPhone long capture; TEST FIXTURE: splats from the gsplat smoke run, assumed scale, placeholder grid" \
-    --license "CC BY 4.0" --attribution "MuSHRoom dataset (Zhao et al.)" --default --verify-dir "$V/test/last_run"
+    --license "CC BY 4.0" --attribution "MuSHRoom dataset (Zhao et al.)" --default --places "$V/test/fixtures/honka_places.json" --verify-dir "$V/test/last_run"
   PAR=""
   [ -f "$F/parity/parity.json" ] && PAR="--parity $F/parity"
   node "$V/test/run.mjs" --web "$V/dist" --out "$V/test/last_run" --pairs "$F/test_photos/train_poses.json" $PAR

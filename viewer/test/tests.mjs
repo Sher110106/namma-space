@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startServer } from "./lib/server.mjs";
 import { withBrowser, openViewer, waitFullLoad, sceneJson, consoleErrors, sleep } from "./lib/env.mjs";
+import { registerGuideTests } from "./tests_guide.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUNDLE = path.join(HERE, "../tools/bundle.py");
@@ -237,6 +238,7 @@ T("H8", "bundle.py output validates: required keys, files present, sizes match; 
   mutate("grid_missing", (sd) => fs.rmSync(path.join(sd, "grid.png")));
   mutate("wrong_count", (sd, p) => edit((j) => (j.splats.sd.count += 1))(sd, p));
   mutate("grid_dims", (sd, p) => edit((j) => (j.grid.width += 1))(sd, p));
+  mutate("bad_place", (sd, p) => edit((j) => (j.places = [{ id: "x", name: "", kind: "item", position: [0, 0, 0], radius_m: 0.4 }]))(sd, p));
   mutate("heldout_photo_missing", (sd, p) => { if (sj.scene.heldout.length) fs.rmSync(path.join(sd, sj.scene.heldout[0].photo)); else throw new Error("no heldout"); });
   fs.rmSync(tmp, { recursive: true, force: true });
   const allRejected = muts.every((m) => m.rejected);
@@ -464,3 +466,6 @@ T("X12", "L copies a spot link; opening it puts the player at the same pose", as
     return { pass: Math.abs(p.yawDeg - 77) < 0.1 && Math.abs(p.pitchDeg + 8) < 0.1, value: `${link.replace(/^https?:\/\/[^/]+/, "")} -> yaw ${p.yawDeg.toFixed(1)}, pitch ${p.pitchDeg.toFixed(1)}` };
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------- Round 2 preview: places, search, route, measure
+registerGuideTests(T);

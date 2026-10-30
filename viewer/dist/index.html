@@ -31,6 +31,7 @@
   })();
 </script>
 <div id="stage"></div>
+<canvas id="overlay"></canvas>
 
 <div id="hud" class="panel expanded" hidden>
   <div class="hud-chip" id="hud-chip"><b id="chip-fps">--</b><span> fps</span><span id="chip-scale" class="dim"></span></div>
@@ -42,6 +43,52 @@
     <div class="row"><span>quality</span><b id="h-q">--</b></div>
     <div class="row"><span>scale</span><b id="h-scale">--</b></div>
     <div class="row gpu"><span>GPU</span><b id="h-gpu">--</b></div>
+  </div>
+</div>
+
+
+<button id="srch-btn" class="pill" type="button" title="Search rooms and items (/)" hidden>
+  <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  <span>Search</span><kbd>/</kbd>
+</button>
+<div id="srch" class="panel" hidden>
+  <div class="srch-row">
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="srch-in" type="text" placeholder="Search a room or item" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-label="Search places">
+    <button id="srch-x" type="button" aria-label="Close search">&times;</button>
+  </div>
+  <ul id="srch-list" role="listbox"></ul>
+  <div class="srch-foot"><span class="tag">Round 2 preview</span><span class="dim">Enter picks the top match</span></div>
+</div>
+
+<div id="place" class="panel" hidden>
+  <div class="pl-head"><b id="pl-name"></b><span id="pl-kind" class="chip"></span><span class="tag">Round 2 preview</span><button id="pl-x" type="button" aria-label="Clear selection">&times;</button></div>
+  <div id="pl-info" class="pl-info"></div>
+  <div class="pl-btns">
+    <button id="pl-jump" type="button">Jump <kbd>J</kbd></button>
+    <button id="pl-route" type="button">Route <kbd>G</kbd></button>
+    <button id="pl-follow" type="button" hidden>Follow <kbd>Space</kbd></button>
+    <button id="pl-rm" type="button" class="ghost" hidden>Remove</button>
+  </div>
+</div>
+
+<div id="tool" class="panel" hidden>
+  <div id="tool-msg"></div>
+  <div class="tool-btns"><button id="tool-copy" type="button">Copy places JSON</button><button id="tool-clear" type="button">Clear</button><button id="tool-done" type="button">Done</button></div>
+</div>
+<div id="padd" class="panel" hidden>
+  <div class="padd-head"><b>New place</b><span id="padd-pos" class="dim"></span></div>
+  <input id="padd-name" type="text" placeholder="Name, for example Study desk" autocomplete="off" maxlength="60" aria-label="Place name">
+  <div id="padd-kind" class="seg"><button type="button" data-k="room">Room</button><button type="button" data-k="item" class="on">Item</button><button type="button" data-k="zone">Zone</button></div>
+  <input id="padd-alias" type="text" placeholder="Other names, comma separated (optional)" autocomplete="off" maxlength="120" aria-label="Other names">
+  <div class="tool-btns"><button id="padd-ok" type="button" class="go small">Add</button><button id="padd-cancel" type="button" class="ghost">Cancel</button></div>
+</div>
+<div id="jsonbox" class="overlay" hidden>
+  <div class="card narrow">
+    <h1>Places JSON</h1>
+    <p class="dim">Copy this text and paste it into scene.json as the value of "places".</p>
+    <textarea id="jsonbox-text" readonly rows="10"></textarea>
+    <button id="jsonbox-close" class="go small" type="button">Close</button>
   </div>
 </div>
 
@@ -69,6 +116,8 @@
           <li><kbd>Shift</kbd> run</li>
           <li>Mouse: look (click the scene to capture it; <kbd>Esc</kbd> to release)</li>
           <li><kbd>M</kbd> map, click it to jump &middot; <kbd>R</kbd> respawn</li>
+          <li class="needs-places" hidden><kbd>/</kbd> search a room or item: <kbd>J</kbd> jump, <kbd>G</kbd> route, <kbd>Space</kbd> follow <span class="tag">Round 2 preview</span></li>
+          <li><kbd>K</kbd> measure between two points</li>
           <li><kbd>1</kbd>&ndash;<kbd>5</kbd> saved views &middot; <kbd>H</kbd> stats &middot; <kbd>?</kbd> help</li>
           <li>Phone: left thumb walks, right thumb looks</li>
         </ul>
@@ -78,9 +127,10 @@
         <ol class="path">
           <li><b>Walk</b> for a minute. Walk into a wall: you stop and slide along it.</li>
           <li><b>Map</b> (<kbd>M</kbd>): click a far corner and look back across the room.</li>
+          <li class="needs-places" hidden><b>Find</b> (<kbd>/</kbd>): type a room or item. Press Route to see the walking path round the furniture, then Follow.</li>
           <li><b>Reality check</b> (<kbd>C</kbd>): drag the slider between a held-out photo and the live render.</li>
           <li><b>Tour benchmark</b> (<kbd>T</kbd>): a fixed 60 s walk that prints fps, p95, splats, MB and GPU.</li>
-          <li><b>Scale</b>: the badge in the stats panel gives the size error we measured.</li>
+          <li><b>Scale</b>: the stats badge gives the size error we measured. Press <kbd>K</kbd> and click two points to measure with it.</li>
         </ol>
       </div>
     </div>
@@ -103,11 +153,15 @@
       <tr><td><kbd>1</kbd>&ndash;<kbd>5</kbd></td><td>jump to a saved view</td></tr>
       <tr><td><kbd>T</kbd></td><td>tour benchmark (60 s, fixed path)</td></tr>
       <tr><td><kbd>C</kbd></td><td>reality check: photo against render; <kbd>&larr;</kbd><kbd>&rarr;</kbd> change photo</td></tr>
+      <tr class="needs-places" hidden><td><kbd>/</kbd></td><td>search rooms and items by name (Round 2 preview); Enter picks the top match</td></tr>
+      <tr class="needs-places" hidden><td><kbd>J</kbd> <kbd>G</kbd> <kbd>Space</kbd></td><td>jump to the picked place &middot; show the walking route &middot; follow the route</td></tr>
+      <tr><td><kbd>K</kbd></td><td>measure: click two points; shows metres and the scale error</td></tr>
+      <tr><td><kbd>P</kbd></td><td>add a place (owner tool): click a spot, name it, then copy the places JSON</td></tr>
       <tr><td><kbd>L</kbd></td><td>copy a link that opens this scene at this spot</td></tr>
       <tr><td><kbd>F</kbd></td><td>fly mode (passes furniture, stays inside the room)</td></tr>
       <tr><td><kbd>?</kbd> / <kbd>Esc</kbd></td><td>this help / close</td></tr>
     </table>
-    <p class="dim" id="help-flags">URL options: ?scene=name &middot; ?q=low|sd|hd &middot; ?pose=x,y,z,yaw,pitch &middot; ?bench=1 &middot; ?keys=1 &middot; ?asset=URL</p>
+    <p class="dim" id="help-flags">URL options: ?scene=name &middot; ?place=id&amp;route=1&amp;follow=1 &middot; ?q=low|sd|hd &middot; ?pose=x,y,z,yaw,pitch &middot; ?bench=1 &middot; ?keys=1 &middot; ?asset=URL</p>
   </div>
 </div>
 
@@ -150,7 +204,8 @@
 
 <div id="bottom" class="panel" hidden>
   <button id="b-hd" hidden>HD</button>
-  <span class="dim" id="b-hint">WASD walk &middot; Shift run &middot; M map &middot; ? help</span>
+  <button id="b-measure" type="button" hidden>Measure</button>
+  <span class="dim" id="b-hint">WASD walk &middot; Shift run &middot; M map<span class="needs-places" hidden> &middot; / search</span> &middot; K measure &middot; ? help</span>
 </div>
 
 <div id="toast" hidden></div>

@@ -8,12 +8,13 @@ import { Governor, buildLadder } from "./governor.js";
 import { FrameStats } from "./stats.js";
 import { TourPath } from "./tour.js";
 import { Minimap } from "./minimap.js";
+import { Guide } from "./guide.js";
 import * as sim from "./sim.js";
 
 const $ = (id) => document.getElementById(id);
 const P = new URLSearchParams(location.search);
 const flag = (k) => P.has(k) && P.get(k) !== "0" && P.get(k) !== "false";
-const FLAGS = { scene: P.get("scene"), asset: P.get("asset"), pose: P.get("pose"), bench: flag("bench"), stress: flag("stress"), keys: flag("keys"), q: P.get("q") };
+const FLAGS = { scene: P.get("scene"), asset: P.get("asset"), pose: P.get("pose"), bench: flag("bench"), stress: flag("stress"), keys: flag("keys"), q: P.get("q"), place: P.get("place"), route: flag("route"), follow: flag("follow") };
 const t0 = performance.now();
 const ns = (window.__ns = { flags: FLAGS, version: { spark: "2.4.0", three: THREE.REVISION }, log: [], firstFrameMs: null, ready: false, error: null });
 const note = (m) => ns.log.push(`${(performance.now() - t0).toFixed(0)}ms ${m}`);
@@ -70,7 +71,7 @@ const S = {
   loadedBytes: 0, bytesByUrl: new Map(), splatCount: 0,
   stats: new FrameStats(), gov: null, pr: 1, maxStdDev: Math.sqrt(8),
   firstFrame: false, sawSplats: false, frames: 0,
-  bench: null, reality: null, hudLast: 0, hudTimer: null,
+  bench: null, reality: null, hudLast: 0, hudTimer: null, guide: null,
 };
 ns.S = S; ns.renderer = renderer; ns.camera = camera; ns.THREE = THREE;
 
@@ -213,6 +214,7 @@ function setView(x, z, yawDeg, pitchDeg, y = null) {
   S.eyeY = y ?? S.data.camera.eye_height;
 }
 function respawn() {
+  S.guide?.stopFollow(true);
   const s = S.data.spawn;
   setView(s.position[0], s.position[2], s.yaw_deg || 0, s.pitch_deg || 0, s.position[1] || S.data.camera.eye_height);
   S.eyeY = S.data.camera.eye_height;
@@ -220,6 +222,7 @@ function respawn() {
 function gotoBookmark(i) {
   const b = S.data.bookmarks[i];
   if (!b) return;
+  S.guide?.stopFollow(true);
   const w = S.walker; w.teleport(b.position[0], b.position[2]); w.yaw = (b.yaw_deg || 0) * Math.PI / 180; w.pitch = (b.pitch_deg || 0) * Math.PI / 180;
   S.eyeY = S.data.camera.eye_height; toast(b.name || `View ${i + 1}`);
 }
@@ -239,10 +242,11 @@ const ctrlKeys = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown"
 const modalOpen = () => !$("start").hidden || !$("help").hidden || !$("bench").hidden || !$("errcard").hidden;
 
 addEventListener("keydown", (e) => {
-  if (e.target?.tagName === "INPUT" && e.code !== "Escape") return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName) && e.code !== "Escape") return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (ctrlKeys.has(e.code)) { S.keys.add(e.code); if (S.mode !== "bench") e.preventDefault(); updateKeyOverlay(); }
   if (e.repeat) return;
+  if (S.mode === "play" && S.started && $("help").hidden && $("bench").hidden && $("errcard").hidden && S.guide?.onKey(e)) { e.preventDefault(); return; }
   switch (e.code) {
     case "Escape": onEscape(); break;
     case "Enter": case "Space": if (!$("start").hidden && !$("s-go").disabled) { e.preventDefault(); startPlay(); } break;
@@ -269,6 +273,7 @@ function onEscape() {
   if (S.mode === "reality") return exitReality();
   if (S.mode === "bench") return stopBench(true);
   if (!$("bench").hidden) { $("bench").hidden = true; return; }
+  if (S.guide?.escape()) return;
   if (document.pointerLockElement) document.exitPointerLock();
 }
 function toggleHelp(force) {
@@ -291,6 +296,7 @@ function toggleFly() {
 }
 
 const SENS_LOCK = 0.0022, SENS_DRAG = 0.0034;
+const look = (dyaw, dpitch) => { if (!S.guide?.following) S.walker.look(dyaw, dpitch); };   // follow mode steers the view itself
 canvas.addEventListener("pointerdown", (e) => {
   if (S.mode !== "play" || e.pointerType === "touch") return;
   S.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
@@ -298,33 +304,36 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 canvas.addEventListener("pointermove", (e) => {
   if (S.mode !== "play") return;
-  if (S.pointerLocked) { S.walker.look(-e.movementX * SENS_LOCK, -e.movementY * SENS_LOCK); return; }
+  if (S.pointerLocked) { look(-e.movementX * SENS_LOCK, -e.movementY * SENS_LOCK); return; }
   if (S.drag && S.drag.id === e.pointerId && e.pointerType !== "touch") {
     const dx = e.clientX - S.drag.x, dy = e.clientY - S.drag.y; S.drag.x = e.clientX; S.drag.y = e.clientY; S.drag.moved += Math.abs(dx) + Math.abs(dy);
-    S.walker.look(-dx * SENS_DRAG, -dy * SENS_DRAG);
+    look(-dx * SENS_DRAG, -dy * SENS_DRAG);
   }
 });
 canvas.addEventListener("pointerup", (e) => {
   if (S.mode !== "play" || !S.drag) return;
   const was = S.drag; S.drag = null;
+  if (was.moved < 4 && e.pointerType !== "touch" && S.guide?.mode) {      // add-place and measure tools: a click picks a point
+    if (!S.guide.pending) S.guide.onCanvasClick(S.pointerLocked ? innerWidth / 2 : e.clientX, S.pointerLocked ? innerHeight / 2 : e.clientY);
+    return;
+  }
   if (was.moved < 4 && e.pointerType !== "touch" && !S.pointerLocked && canvas.requestPointerLock) {
     try { const p = canvas.requestPointerLock(); p?.catch?.(() => {}); } catch {}
   }
 });
-document.addEventListener("pointerlockchange", () => {
-  S.pointerLocked = document.pointerLockElement === canvas;
-  $("paused").hidden = S.pointerLocked || S.mode !== "play" || S.touchDevice || !S.started;
-});
+const updatePaused = () => { $("paused").hidden = S.pointerLocked || S.mode !== "play" || S.touchDevice || !S.started || !!S.guide?.mode || !!S.guide?.searchOpen; };
+document.addEventListener("pointerlockchange", () => { S.pointerLocked = document.pointerLockElement === canvas; updatePaused(); });
 document.addEventListener("pointerlockerror", () => { S.pointerLocked = false; toast("Pointer lock unavailable here: drag to look"); });
 
 // touch: left half drags to move (virtual stick), right half drags to look
 S.touchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
 const STICK_R = 55;
-const touchBlocked = (t) => !!(t.target && t.target.closest && t.target.closest("button, #mapwrap, .card, #rc-bar, input, #hud"));
+const touchBlocked = (t) => !!(t.target && t.target.closest && t.target.closest("button, #mapwrap, .card, #rc-bar, input, textarea, #hud, #srch, #place, #tool, #padd"));
 addEventListener("touchstart", (e) => {
   if (S.mode !== "play") return;
   for (const t of e.changedTouches) {
     if (touchBlocked(t)) continue;
+    if (S.guide?.mode) S.tap = { id: t.identifier, x: t.clientX, y: t.clientY, t: performance.now() };      // a short tap with a tool on picks a point
     if (t.clientX < innerWidth / 2 && !S.touch.move) {
       S.touch.move = { id: t.identifier, x: t.clientX, y: t.clientY };
       const st = $("stick"); st.style.left = t.clientX + "px"; st.style.top = t.clientY + "px"; st.firstElementChild.style.transform = ""; $("touch").hidden = false;
@@ -344,13 +353,18 @@ addEventListener("touchmove", (e) => {
       S.touch.str = dx / STICK_R; S.touch.fwd = -dy / STICK_R;
       $("stick").firstElementChild.style.transform = `translate(${dx}px, ${dy}px)`;
     } else if (l && t.identifier === l.id && S.mode === "play") {
-      S.walker.look(-(t.clientX - l.x) * 0.005, -(t.clientY - l.y) * 0.005); l.x = t.clientX; l.y = t.clientY;
+      look(-(t.clientX - l.x) * 0.005, -(t.clientY - l.y) * 0.005); l.x = t.clientX; l.y = t.clientY;
     }
   }
   if (S.touch.move || S.touch.look) e.preventDefault();
 }, { passive: false });
 const touchEnd = (e) => {
   for (const t of e.changedTouches) {
+    const tp = S.tap;
+    if (tp && tp.id === t.identifier && e.type === "touchend") {
+      S.tap = null;
+      if (S.guide?.mode && !S.guide.pending && Math.hypot(t.clientX - tp.x, t.clientY - tp.y) < 12 && performance.now() - tp.t < 500) S.guide.onCanvasClick(t.clientX, t.clientY);
+    }
     if (S.touch.move && t.identifier === S.touch.move.id) { S.touch.move = null; S.touch.fwd = S.touch.str = 0; $("touch").hidden = true; }
     if (S.touch.look && t.identifier === S.touch.look.id) S.touch.look = null;
   }
@@ -415,6 +429,7 @@ function cycleMap() {
 const smallMapPx = () => Math.round(Math.max(120, Math.min(220, Math.min(innerWidth, innerHeight) * 0.36)));
 function mapPick(x, z) {
   if (S.mode !== "play") return;
+  S.guide?.stopFollow(true);
   if (S.touchDevice && !$("mapwrap").classList.contains("large")) { cycleMap(); return; }   // phones: tap the small map to enlarge it
   if (S.walker.teleport(x, z)) { toast("Jumped"); if ($("mapwrap").classList.contains("large")) { $("mapwrap").classList.remove("large"); S.minimap.size(smallMapPx()); } }
   else toast("No walkable cell nearby");
@@ -549,7 +564,12 @@ function frame(now) {
   const dt = S.stats.tick(now);
   S.frames++;
   const dtS = Math.min(0.1, dt / 1000);
-  if (S.mode === "play" && S.started && !modalOpen()) S.walker.update(dtS, readInput());
+  if (S.mode === "play" && S.started && !modalOpen()) {
+    const gd = S.guide;
+    let inp = readInput();
+    if (gd?.following) { if (inp.forward || inp.strafe) gd.stopFollow(); else inp = gd.followInput(dtS); }   // any move key hands control back
+    S.walker.update(dtS, inp);
+  }
   else if (S.mode === "bench" && S.bench) stepBench(now);
   else if (S.walker && S.mode === "play") S.walker.update(dtS, { forward: 0, strafe: 0, run: false });
   if (S.mode !== "reality") applyCamera();
@@ -558,6 +578,7 @@ function frame(now) {
     S.sawSplats = true; ns.firstFrameMs = performance.now(); ns.firstSplatCount = S.splatCount; note("first splat frame");
     onFirstFrame();
   }
+  if (S.guide) S.guide.update(now, dtS);
   if (S.sawSplats && dt > 0 && S.mode !== "reality" && S.gov) S.gov.push(dt, now);
   if (S.minimap && S.mode === "play" && !$("mapwrap").hidden) S.minimap.draw(S.walker);
   updateHud();
@@ -583,6 +604,7 @@ function startPlay() {
   $("bottom").hidden = false;
 }
 $("s-go").addEventListener("click", startPlay);
+$("b-measure").addEventListener("click", (e) => { S.guide?.beginMeasure(); e.currentTarget.blur(); });
 $("b-hd").addEventListener("click", () => toggleHd().catch((e) => toast("HD failed: " + e.message)));
 const hfovDeg = () => (2 * Math.atan(Math.tan((camera.fov * Math.PI) / 360) * camera.aspect) * 180) / Math.PI;
 addEventListener("resize", () => {
@@ -599,7 +621,7 @@ function installHooks() {
   Object.assign(ns, {
     pose: poseOf,
     setPose(x, y, z, yawDeg, pitchDeg) { setView(x, z, yawDeg, pitchDeg, y); },
-    grid: S.grid, walker: S.walker, governor: S.gov, tourPath: S.tour,
+    grid: S.grid, walker: S.walker, governor: S.gov, tourPath: S.tour, guide: S.guide,
     sim: {
       randomWalks: (o) => sim.randomWalks(S.grid, walkerCfg(), o),
       headingPushes: (o) => sim.headingPushes(S.grid, walkerCfg(), { x: S.data.spawn.position[0], z: S.data.spawn.position[2] }, o),
@@ -658,7 +680,7 @@ async function boot() {
       const el = $("s-others"); el.hidden = false;
       el.innerHTML = "Other scenes: " + others.map((x) => `<a href="?scene=${encodeURIComponent(x.name)}">${(x.title || x.name).replace(/[<&]/g, "")}</a>`).join(" &middot; ");
     }
-    if (S.touchDevice && matchMedia("(pointer: coarse)").matches) $("b-hint").innerHTML = "left thumb walks &middot; right thumb looks &middot; tap the map to enlarge";
+    if (S.touchDevice && matchMedia("(pointer: coarse)").matches) $("b-hint").innerHTML = `left thumb walks &middot; right thumb looks &middot; tap the map to enlarge`;
     camera.fov = d.camera.fov_y_deg; camera.near = d.camera.near; camera.far = d.camera.far; camera.updateProjectionMatrix();
     S.eyeY = d.camera.eye_height;
     if (FLAGS.bench) S.started = true;
@@ -701,6 +723,11 @@ async function boot() {
     S.minimap.fovDeg = hfovDeg();
     S.minimap.bookmarks = d.bookmarks.slice(0, 5).map((b, i) => ({ ...b, n: i + 1 }));
     S.minimap.size(smallMapPx());
+    S.guide = new Guide({ S, camera, canvas, scene, toast, updatePaused });
+    S.guide.init(d.places);
+    $("b-measure").hidden = !(S.touchDevice && matchMedia("(pointer: coarse)").matches);      // phones have no K key
+    S.minimap.onPlace = (p) => { if (S.touchDevice && !$("mapwrap").classList.contains("large")) { cycleMap(); return; } S.guide.select(p); };
+    if (FLAGS.place && S.guide.select(FLAGS.place)) { if (FLAGS.follow) S.guide.startFollow(); else if (FLAGS.route) S.guide.toggleRoute(); }
     S.minimap.buildTint();
     $("mapwrap").hidden = false;
     S.minimap.draw(S.walker);

@@ -11,9 +11,14 @@ Writes (CONTRACTS 2.12):
 Usage:
   bundle.py --run RUN_DIR [--out DIR] [--name NAME] [--title T] [--kind captured|fixture|public]
             [--source S] [--license L] [--attribution A] [--captured YYYY-MM-DD] [--eye-height M]
-            [--video-url URL] [--default] [--strict] [--no-viewer]
+            [--video-url URL] [--default] [--strict] [--no-viewer] [--places places.json]
   bundle.py --validate WEB_DIR [--strict]
   bundle.py --zip OUT.zip --run RUN_DIR ...      also write the offline copy (web folder + a one-line start note)
+
+Places (Round 2 preview): --places FILE merges named places into scene.json "places". FILE is a JSON list (what the viewer's
+"Copy places JSON" button gives) or {"places": [...]}. Each place: name (required), kind room|item|zone (default item),
+position [x, y, z] in metres or [x, z] (y is then 1.0 for items, 0.0 otherwise), aliases (list or "a, b"), yaw_deg, radius_m, id.
+Without --places, RUN_DIR/places.json is used when it exists.
 
 Exit codes: 0 valid, 1 invalid (errors), 2 bad usage / missing inputs.
 """
@@ -338,6 +343,11 @@ def compose_scene(run: Path, name: str, args: argparse.Namespace, warnings: list
     ppm = (grid_json.get("minimap") or {}).get("px_per_m") or (mi["width"] / (gw * cell) if gw * cell else 40)
     prov = {"kind": args.kind, "source": args.source or meta.get("notes", ""), "license": args.license or "", "attribution": args.attribution or "",
             "captured": args.captured or "", "manual_steps": list(meta.get("manual_steps", [])) + list(args.manual_step or [])}
+    places: list[dict[str, Any]] = []
+    pfile = Path(args.places) if getattr(args, "places", None) else (run / "places.json" if (run / "places.json").exists() else None)
+    if pfile is not None:
+        places = load_places(pfile, (gw, gh, gdata, origin, cell), warnings)
+        print(f"bundle: {len(places)} places from {pfile}", file=sys.stderr)
     scene = {
         "schema": SCHEMA, "name": name, "title": args.title or name, "provenance": prov,
         "frame": {"units": "m", "up": "+y", "floor_y": float(grid_json.get("floor_y") or 0.0), "handedness": "right"},
@@ -346,12 +356,85 @@ def compose_scene(run: Path, name: str, args: argparse.Namespace, warnings: list
         "spawn": spawn, "bounds": bounds,
         "grid": {"url": "grid.png", "origin_xz": origin, "cell": cell, "width": gw, "height": gh, "row0": "min_z", "values": {"walkable": 255, "floor": 128, "blocked": 0}},
         "minimap": {"url": "minimap.png", "origin_xz": origin, "px_per_m": round(ppm, 3)},
-        "bookmarks": bookmarks, "tour": tour, "heldout": held, "places": [], "scale": scale, "metrics": metrics,
+        "bookmarks": bookmarks, "tour": tour, "heldout": held, "places": places, "scale": scale, "metrics": metrics,
         "build": {"git": runj.get("git", "") or git_rev(VIEWER), "pipeline": "0.9.0", "date": _dt.datetime.now().astimezone().isoformat(timespec="seconds"), "report": "report.json"},
     }
     if walk_cells == 0:
         warnings.append("grid.png has no walkable (255) cells")
     return scene, files
+
+
+# ----------------------------------------------------------------------------------------------- places
+PLACE_KINDS = ("room", "item", "zone")
+PLACE_RADIUS = {"room": 1.5, "zone": 1.0, "item": 0.4}
+
+
+def slugify(text: str) -> str:
+    out = "".join(c if c.isalnum() else "-" for c in text.lower()).strip("-")
+    while "--" in out:
+        out = out.replace("--", "-")
+    return out[:40] or "place"
+
+
+def nearest_walkable_m(data: bytes, w: int, h: int, origin: list[float], cell: float, x: float, z: float) -> float:
+    """Distance in metres from (x, z) to the nearest walkable (255) cell centre; inf when there is none."""
+    best = math.inf
+    for k, v in enumerate(data):
+        if v == 255:
+            cx = origin[0] + (k % w + 0.5) * cell
+            cz = origin[1] + (k // w + 0.5) * cell
+            d = math.hypot(cx - x, cz - z)
+            if d < best:
+                best = d
+    return best
+
+
+def load_places(path: Path, grid: tuple[int, int, bytes, list[float], float] | None, warnings: list[str]) -> list[dict[str, Any]]:
+    """Read and normalise a places file. Raises ValueError with a clear message on bad input."""
+    raw = json.loads(path.read_text())
+    if isinstance(raw, dict):
+        raw = raw.get("places", [])
+    if not isinstance(raw, list):
+        raise ValueError(f"{path}: expected a JSON list of places or {{\"places\": [...]}}")
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for i, p in enumerate(raw):
+        where = f"{path.name} place {i + 1}"
+        if not isinstance(p, dict):
+            raise ValueError(f"{where}: not an object")
+        name = str(p.get("name", "")).strip()
+        if not name:
+            raise ValueError(f"{where}: name is required")
+        kind = p.get("kind", "item")
+        if kind not in PLACE_KINDS:
+            raise ValueError(f"{where} ({name}): kind must be one of {', '.join(PLACE_KINDS)}, got {kind!r}")
+        pos = p.get("position")
+        if not isinstance(pos, (list, tuple)) or len(pos) not in (2, 3) or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in pos):
+            raise ValueError(f"{where} ({name}): position must be [x, y, z] or [x, z] in metres")
+        pos = [float(v) for v in pos]
+        if len(pos) == 2:
+            pos = [pos[0], 1.0 if kind == "item" else 0.0, pos[1]]
+        al = p.get("aliases", [])
+        aliases = [a.strip() for a in al.split(",")] if isinstance(al, str) else [str(a).strip() for a in al]
+        aliases = [a for a in aliases if a]
+        radius = p.get("radius_m", PLACE_RADIUS[kind])
+        if not isinstance(radius, (int, float)) or not radius > 0:
+            raise ValueError(f"{where} ({name}): radius_m must be a positive number")
+        pid = slugify(str(p.get("id") or name))
+        base, n = pid, 2
+        while pid in seen:
+            pid, n = f"{base}-{n}", n + 1
+        seen.add(pid)
+        yaw = p.get("yaw_deg", 0.0)
+        if not isinstance(yaw, (int, float)) or not math.isfinite(yaw):
+            raise ValueError(f"{where} ({name}): yaw_deg must be a number")
+        out.append({"id": pid, "name": name, "aliases": aliases, "kind": kind, "position": [round(v, 3) for v in pos], "yaw_deg": round(float(yaw), 2), "radius_m": round(float(radius), 3)})
+        if grid:
+            gw, gh, gdata, origin, cell = grid
+            d = nearest_walkable_m(gdata, gw, gh, origin, cell, pos[0], pos[2])
+            if d > 3.0:
+                warnings.append(f"place {name!r}: the nearest walkable cell is {d:.1f} m away; check its position (x, z in metres, same frame as the grid)")
+    return out
 
 
 def copy_viewer(out: Path, video_url: str) -> None:
@@ -462,6 +545,16 @@ def validate_web(web: Path, strict: bool = False) -> dict[str, Any]:
             mi = png_info(mp)
             exp_w = (g.get("width", 0) * g.get("cell", 0)) * m.get("px_per_m", 0)
             check(f"{name}: minimap px_per_m consistent", abs(mi["width"] - exp_w) <= 2, f"png width {mi['width']} vs {exp_w:.1f}")
+        seen_ids: set[str] = set()
+        for pl in sj.get("places", []) or []:
+            pid = pl.get("id") if isinstance(pl, dict) else None
+            pos = pl.get("position", []) if isinstance(pl, dict) else []
+            ok = (isinstance(pid, str) and pid and pid not in seen_ids and str(pl.get("name", "")).strip() != "" and pl.get("kind") in PLACE_KINDS
+                  and len(pos) == 3 and all(isinstance(v, (int, float)) and math.isfinite(v) for v in pos)
+                  and isinstance(pl.get("radius_m"), (int, float)) and pl["radius_m"] > 0 and isinstance(pl.get("aliases", []), list))
+            check(f"{name}: place {pid} shape", ok, str(pl))
+            if isinstance(pid, str):
+                seen_ids.add(pid)
         for b in sj.get("bookmarks", []):
             check(f"{name}: bookmark {b.get('id')} shape", len(b.get("position", [])) == 3 and "yaw_deg" in b, str(b))
         for h in sj.get("heldout", []):
@@ -495,6 +588,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--manual-step", action="append")
     ap.add_argument("--eye-height", type=float)
     ap.add_argument("--video-url", default="")
+    ap.add_argument("--places", help="JSON file of named places to merge into scene.json (see the module docstring)")
     ap.add_argument("--default", action="store_true", help="make this the default scene in scenes/index.json")
     ap.add_argument("--no-viewer", action="store_true", help="write only scenes/<name>/ (viewer files already there)")
     ap.add_argument("--strict", action="store_true", help="treat warnings as errors")
@@ -516,7 +610,7 @@ def main(argv: list[str] | None = None) -> int:
     warnings: list[str] = []
     try:
         scene, files = compose_scene(run, name, a, warnings)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
         print(f"bundle: {e}", file=sys.stderr)
         return 2
     tmp = out.parent / (out.name + ".tmp")

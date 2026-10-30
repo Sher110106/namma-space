@@ -1,0 +1,39 @@
+{
+  "astar_vs_dijkstra_pairs": 60,
+  "synthetic": {
+    "grids": 5,
+    "pairs": 600,
+    "samples": 63973,
+    "blocked_samples": 0,
+    "worst_length_ratio": 1.0485,
+    "mean_length_ratio": 0.9713
+  },
+  "honka": {
+    "pairs": 400,
+    "samples": 37731,
+    "blocked_samples": 0,
+    "worst_length_ratio": 1.0229,
+    "mean_length_ratio": 0.9613,
+    "min_length_ratio": 0.9239,
+    "walkable_m2": 32.2
+  },
+  "follow_sim": [
+    {
+      "name": "gap wall",
+      "length_m": 5.94,
+      "seconds": 5.2,
+      "mean_mps": 1.13,
+      "end_error_m": 0.208,
+      "blocked_frames": 0
+    },
+    {
+      "name": "honka",
+      "length_m": 10.59,
+      "seconds": 8.3,
+      "mean_mps": 1.27,
+      "end_error_m": 0.219,
+      "blocked_frames": 0
+    }
+  ],
+  "search_typo_cases": 9
+}

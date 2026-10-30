@@ -6,8 +6,9 @@ export class Minimap {
    * @param {{origin_xz:number[],px_per_m:number}} meta  minimap.json block of scene.json
    * @param {import('./walker.js').Grid} grid
    */
-  constructor(canvas, meta, grid, onPick) {
-    this.c = canvas; this.ctx = canvas.getContext("2d"); this.meta = meta; this.grid = grid; this.onPick = onPick;
+  constructor(canvas, meta, grid, onPick, onPlace = null) {
+    this.c = canvas; this.ctx = canvas.getContext("2d"); this.meta = meta; this.grid = grid; this.onPick = onPick; this.onPlace = onPlace;
+    this.places = []; this.selId = null; this.route = null; this.stand = null; this.ver = 0;      // set by guide.js: places, selected id, route points [[x, z]], stand spot
     this.img = null; this.tint = null; this.bookmarks = []; this.fovDeg = 70;
     this.worldW = grid.w * grid.cell; this.worldH = grid.h * grid.cell;
     this.size(220);
@@ -44,6 +45,12 @@ export class Minimap {
     const px = ((e.clientX - r.left) / r.width) * this.c.width, pz = ((e.clientY - r.top) / r.height) * this.c.height;
     const [x, z] = this.fromCanvas(px, pz);
     e.stopPropagation();
+    if (this.onPlace && this.places.length) {         // a click on a place marker selects it instead of jumping
+      const reach = 11 * (this.c.width / r.width);                  // 11 CSS px, in canvas px
+      let best = null, bd = reach;
+      for (const p of this.places) { const [mx, mz] = this.toCanvas(p.position[0], p.position[2]); const d = Math.hypot(mx - px, mz - pz); if (d < bd) { bd = d; best = p; } }
+      if (best) { this.onPlace(best); return; }
+    }
     this.onPick(x, z);
   }
   /** Base layer (image + walkable tint) is drawn once per size or image change; only the overlay is redrawn per call. */
@@ -64,7 +71,7 @@ export class Minimap {
     return cv;
   }
   draw(player, force = false) {
-    const key = `${player.x.toFixed(2)},${player.z.toFixed(2)},${player.yaw.toFixed(2)},${this.c.width},${this.imgVersion}`;
+    const key = `${player.x.toFixed(2)},${player.z.toFixed(2)},${player.yaw.toFixed(2)},${this.c.width},${this.imgVersion},${this.ver}`;
     if (!force && key === this.lastKey) return;       // nothing moved: skip the redraw
     this.lastKey = key;
     const ctx = this.ctx, W = this.c.width, H = this.c.height;
@@ -76,6 +83,8 @@ export class Minimap {
       ctx.fillStyle = "rgba(251,191,36,.95)"; ctx.beginPath(); ctx.arc(bx, bz, 4 * d, 0, 7); ctx.fill();
       ctx.fillStyle = "#1a1300"; ctx.font = `700 ${7 * d}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(b.n), bx, bz + 0.4 * d);
     }
+    this.drawRoute(ctx, d);
+    this.drawPlaces(ctx, d);
     const [px, pz] = this.toCanvas(player.x, player.z);
     const ang = Math.atan2(-Math.cos(player.yaw), -Math.sin(player.yaw));   // screen angle of the forward vector (x right, z down)
     const half = (this.fovDeg * Math.PI / 180) / 2, len = 2.2 * this.k;
@@ -83,6 +92,41 @@ export class Minimap {
     ctx.save(); ctx.translate(px, pz); ctx.rotate(ang + Math.PI / 2);
     ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0b0e14"; ctx.lineWidth = 1.5 * d;
     ctx.beginPath(); ctx.moveTo(0, -7 * d); ctx.lineTo(5 * d, 6 * d); ctx.lineTo(0, 3 * d); ctx.lineTo(-5 * d, 6 * d); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  drawRoute(ctx, d) {
+    const r = this.route;
+    if (!r || r.length < 2) return;
+    ctx.save(); ctx.lineJoin = "round"; ctx.lineCap = "round";
+    const trace = () => { ctx.beginPath(); r.forEach((p, k) => { const [x, z] = this.toCanvas(p[0], p[1]); k ? ctx.lineTo(x, z) : ctx.moveTo(x, z); }); };
+    trace(); ctx.lineWidth = 5.5 * d; ctx.strokeStyle = "rgba(6,8,12,.85)"; ctx.stroke();
+    trace(); ctx.lineWidth = 3 * d; ctx.strokeStyle = "#5eead4"; ctx.stroke();
+    // a small arrow every ~1.2 m shows the direction
+    let carry = 0;
+    for (let k = 1; k < r.length; k++) {
+      const ax = r[k - 1][0], az = r[k - 1][1], bx = r[k][0], bz = r[k][1], L = Math.hypot(bx - ax, bz - az); if (L < 1e-6) continue;
+      for (let t = 1.2 - carry; t < L; t += 1.2) {
+        const [x, z] = this.toCanvas(ax + ((bx - ax) * t) / L, az + ((bz - az) * t) / L), ang = Math.atan2(bz - az, bx - ax);
+        ctx.save(); ctx.translate(x, z); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(3.2 * d, 0); ctx.lineTo(-2.4 * d, -2.8 * d); ctx.lineTo(-2.4 * d, 2.8 * d); ctx.closePath(); ctx.fillStyle = "#04201b"; ctx.fill(); ctx.restore();
+      }
+      carry = (carry + L) % 1.2;
+    }
+    ctx.restore();
+  }
+  drawPlaces(ctx, d) {
+    if (!this.places.length) return;
+    const big = this.c.width / this.dpr > 300;
+    ctx.save(); ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    for (const p of this.places) {
+      const sel = p.id === this.selId, [x, z] = this.toCanvas(p.position[0], p.position[2]), s = (sel ? 5.5 : 3.6) * d;
+      ctx.beginPath(); ctx.moveTo(x, z - s); ctx.lineTo(x + s, z); ctx.lineTo(x, z + s); ctx.lineTo(x - s, z); ctx.closePath();
+      ctx.fillStyle = sel ? "#ff5d73" : "rgba(255,93,115,.78)"; ctx.fill(); ctx.lineWidth = (sel ? 1.8 : 1.1) * d; ctx.strokeStyle = "#fff"; ctx.stroke();
+      if (sel || big) {
+        ctx.font = `${sel ? 700 : 600} ${(sel ? 11 : 10) * d}px system-ui, sans-serif`;
+        const w = ctx.measureText(p.name).width, lx = Math.max(w / 2 + 3 * d, Math.min(this.c.width - w / 2 - 3 * d, x)), ly = z - s - 4 * d < 12 * d ? z + s + 12 * d : z - s - 4 * d;
+        ctx.lineWidth = 3 * d; ctx.strokeStyle = "rgba(6,8,12,.9)"; ctx.strokeText(p.name, lx, ly); ctx.fillStyle = "#fff"; ctx.fillText(p.name, lx, ly);
+      }
+    }
     ctx.restore();
   }
 }
