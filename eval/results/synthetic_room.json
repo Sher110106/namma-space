@@ -4,10 +4,25 @@
   "kind": "j5_tsdf",
   "status": "pass",
   "views": 4,
-  "vertices": 1978,
-  "median_wall_error_m": 0.013052582740783691,
+  "vertices": 8558,
+  "median_wall_error_m": 0.003637606505663582,
   "gate_m": 0.02,
   "voxel_size_m": 0.02,
   "sdf_trunc_m": 0.08,
-  "depth_trunc_m": 5.0
+  "depth_trunc_m": 5.0,
+  "fusion": {
+    "requested": "UniformTSDFVolume",
+    "voxel_size_m": 0.02,
+    "sdf_trunc_m": 0.08,
+    "depth_trunc_m": 5.0,
+    "origin_m": [
+      -1.28,
+      -0.18000000447034847,
+      -0.08000000000000007
+    ],
+    "length_m": 2.56,
+    "resolution": 128,
+    "effective_voxel_size_m": 0.02,
+    "method": "UniformTSDFVolume"
+  }
 }

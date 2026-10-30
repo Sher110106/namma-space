@@ -1,7 +1,8 @@
 {
   "schema": "namma-space/eval@1",
-  "name": "mushroom_honka_lidar",
+  "name": "mushroom_honka_lidar_uniform",
   "kind": "mushroom_lidar_baseline",
+  "status": "complete",
   "dataset": "/w/data/mushroom/room_datasets/honka",
   "pose_source": "iphone/long_capture/transformations.json",
   "pose_convention": "OpenGL c2w converted with diag(1,-1,-1)",
@@ -14,51 +15,111 @@
   "icp": "/w/data/mushroom/room_datasets/honka/icp_iphone.json",
   "score": {
     "raw": {
-      "accuracy_m": 0.30427723105044135,
-      "completeness_m": 0.025467694067999497,
-      "accuracy_median_m": 0.1334897968404432,
-      "completeness_median_m": 0.022857736312272968,
-      "f_score_5cm": 0.5727723599832489,
-      "precision_5cm": 0.409822829547705,
-      "recall_5cm": 0.9508326339836589,
-      "n_ours": 196929,
-      "n_gt": 5026098
+      "accuracy_m": 0.21112883074261463,
+      "completeness_m": 0.031016332957514683,
+      "accuracy_median_m": 0.03156906680209799,
+      "completeness_median_m": 0.026760129961170366,
+      "f_score_5cm": 0.7535612287394383,
+      "precision_5cm": 0.64691,
+      "recall_5cm": 0.90232,
+      "n_ours": 100000,
+      "n_gt": 100000
     },
     "cropped": {
-      "accuracy_m": 0.236204342013144,
-      "completeness_m": 0.025467694067999497,
-      "accuracy_median_m": 0.09296685812457123,
-      "completeness_median_m": 0.022857736312272968,
-      "f_score_5cm": 0.6071902886781528,
-      "precision_5cm": 0.44600038683650634,
-      "recall_5cm": 0.9508326339836589,
-      "n_ours": 180955,
-      "n_gt": 5026098
+      "accuracy_m": 0.11897635728774979,
+      "completeness_m": 0.031016608791233826,
+      "accuracy_median_m": 0.02855207047903086,
+      "completeness_median_m": 0.026760129961170366,
+      "f_score_5cm": 0.8025925858862409,
+      "precision_5cm": 0.7227156438873434,
+      "recall_5cm": 0.90232,
+      "n_ours": 89511,
+      "n_gt": 100000
+    },
+    "surface_sampling": {
+      "method": "Open3D sample_points_uniformly",
+      "n_per_surface": 100000
     },
     "crop": {
       "kind": "predicted_inside_gt_bbox_grown",
       "grow_m": 0.05,
       "gt_bbox_min_m": [
-        -4.112767505645752,
-        -3.369944620132446,
-        -0.03710751533508301
+        -4.110924630778267,
+        -3.3689711400312388,
+        -0.03625725088418208
       ],
       "gt_bbox_max_m": [
-        2.2762167930603026,
-        3.9936376094818113,
-        2.511585998535156
+        2.2759088905698692,
+        3.9931615782290546,
+        2.499649320524508
       ],
-      "n_removed": 15974
+      "n_removed": 10489
     }
   },
   "headline_protocol": "cropped",
-  "fusion": "Open3D ScalableTSDFVolume attempted with float32 metre depth, uint8 HxWx3 colour, matching intrinsics, convert_rgb_to_intensity=False, and inverse(c2w) extrinsics; pinned Open3D 0.20 returned zero vertices, so deterministic point-surface fallback was used",
+  "fusion": {
+    "requested": "UniformTSDFVolume",
+    "voxel_size_m": 0.02,
+    "sdf_trunc_m": 0.08,
+    "depth_trunc_m": 5.0,
+    "origin_m": [
+      -6.647720603524368,
+      -5.529284182956208,
+      -4.487510420030858
+    ],
+    "length_m": 9.700000000000001,
+    "resolution": 485,
+    "effective_voxel_size_m": 0.020000000000000004,
+    "method": "UniformTSDFVolume"
+  },
   "git": "unknown",
-  "date": "2026-10-30T06:00:14+00:00",
+  "date": "2026-10-30T07:19:06+00:00",
   "image_digests": {
     "dataset": "2826c176dedb4898476b663b0a533eca15c784d637274a83ab1ecdedef6ef43f",
     "gt_mesh": "90b9471ddfdfcfc77d287f13d6eb582794fb9748386b238b5cfdee90b1d3c978"
   },
-  "command": "python -m eval.score_mushroom --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-honka/mushroom_honka_lidar.json",
-  "status": "complete"
+  "command": "python -m eval.score_mushroom --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-honka/mushroom_honka_lidar_uniform2.json",
+  "fallback_point_surface": {
+    "label": "previous point-surface fallback scores",
+    "score": {
+      "raw": {
+        "accuracy_m": 0.30427723105044135,
+        "completeness_m": 0.025467694067999497,
+        "accuracy_median_m": 0.1334897968404432,
+        "completeness_median_m": 0.022857736312272968,
+        "f_score_5cm": 0.5727723599832489,
+        "precision_5cm": 0.409822829547705,
+        "recall_5cm": 0.9508326339836589,
+        "n_ours": 196929,
+        "n_gt": 5026098
+      },
+      "cropped": {
+        "accuracy_m": 0.236204342013144,
+        "completeness_m": 0.025467694067999497,
+        "accuracy_median_m": 0.09296685812457123,
+        "completeness_median_m": 0.022857736312272968,
+        "f_score_5cm": 0.6071902886781528,
+        "precision_5cm": 0.44600038683650634,
+        "recall_5cm": 0.9508326339836589,
+        "n_ours": 180955,
+        "n_gt": 5026098
+      },
+      "crop": {
+        "kind": "predicted_inside_gt_bbox_grown",
+        "grow_m": 0.05,
+        "gt_bbox_min_m": [
+          -4.112767505645752,
+          -3.369944620132446,
+          -0.03710751533508301
+        ],
+        "gt_bbox_max_m": [
+          2.2762167930603026,
+          3.9936376094818113,
+          2.511585998535156
+        ],
+        "n_removed": 15974
+      }
+    },
+    "fusion": "Open3D ScalableTSDFVolume attempted with float32 metre depth, uint8 HxWx3 colour, matching intrinsics, convert_rgb_to_intensity=False, and inverse(c2w) extrinsics; pinned Open3D 0.20 returned zero vertices, so deterministic point-surface fallback was used"
+  }
 }

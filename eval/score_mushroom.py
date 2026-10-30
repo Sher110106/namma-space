@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from pipeline.geometry.tsdf import depth_view, fuse_depth_views
+from pipeline.geometry.tsdf import SURFACE_SAMPLE_POINTS, depth_view, fuse_depth_views
 
 
 def digest(path: Path) -> str:
@@ -47,14 +47,21 @@ def mushroom_views(root: Path, stride: int = 1):
     return out
 
 
-def _load_points(path: Path):
+def _load_points(path: Path, number_of_points: int = SURFACE_SAMPLE_POINTS):
     import open3d as o3d
     if path.suffix.lower() == ".ply":
         m = o3d.io.read_triangle_mesh(str(path))
+        if len(m.triangles):
+            return np.asarray(m.sample_points_uniformly(number_of_points=number_of_points).points)
         if len(m.vertices):
-            return np.asarray(m.vertices)
+            p = np.asarray(m.vertices)
+            idx = np.linspace(0, len(p) - 1, number_of_points).round().astype(int)
+            return p[idx]
         p = o3d.io.read_point_cloud(str(path))
-        return np.asarray(p.points)
+        q = np.asarray(p.points)
+        if not len(q):
+            return q
+        return q[np.linspace(0, len(q) - 1, number_of_points).round().astype(int)]
     raise ValueError(path)
 
 
@@ -78,8 +85,8 @@ def score_mesh(mesh_path: Path, gt_path: Path, icp_path: Path, threshold: float 
     by 5 cm.  Ground-truth points are left unchanged, so completeness remains
     a coverage measure over the complete Faro scan.
     """
-    ours = _load_points(mesh_path)
-    gt = _load_points(gt_path)
+    ours = _load_points(mesh_path, SURFACE_SAMPLE_POINTS)
+    gt = _load_points(gt_path, SURFACE_SAMPLE_POINTS)
     T = np.asarray(json.loads(icp_path.read_text())["gt_transformation"], dtype=float)
     if pre_transform is not None:
         P = np.asarray(pre_transform, dtype=float)
@@ -90,6 +97,7 @@ def score_mesh(mesh_path: Path, gt_path: Path, icp_path: Path, threshold: float 
     keep = np.all((ours >= lo) & (ours <= hi), axis=1)
     cropped = _score_points(ours[keep], gt, threshold)
     return {"raw": raw, "cropped": cropped,
+            "surface_sampling": {"method": "Open3D sample_points_uniformly", "n_per_surface": SURFACE_SAMPLE_POINTS},
             "crop": {"kind": "predicted_inside_gt_bbox_grown", "grow_m": 0.05,
                      "gt_bbox_min_m": lo.tolist(), "gt_bbox_max_m": hi.tolist(),
                      "n_removed": int((~keep).sum())}}
@@ -121,8 +129,10 @@ def main(argv=None):
     a = ap.parse_args(argv)
     root = a.dataset
     views = mushroom_views(root, max(1, a.stride))
+    previous = json.loads(a.out.read_text()) if a.out.exists() else None
     mesh_path = a.out.with_suffix(".mesh.ply")
-    fuse_depth_views(views, str(mesh_path))
+    fusion_info = {}
+    fuse_depth_views(views, str(mesh_path), fusion_info=fusion_info)
     score = score_mesh(mesh_path, root / "gt_mesh.ply", root / "icp_iphone.json")
     try:
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -135,10 +145,15 @@ def main(argv=None):
               "views": len(views), "stride": a.stride, "voxel_size_m": 0.02, "sdf_trunc_m": 0.08,
               "depth_trunc_m": 5.0, "icp": str(root / "icp_iphone.json"), "score": score,
               "headline_protocol": "cropped",
-              "fusion": "Open3D ScalableTSDFVolume attempted with float32 metre depth, uint8 HxWx3 colour, matching intrinsics, convert_rgb_to_intensity=False, and inverse(c2w) extrinsics; pinned Open3D 0.20 returned zero vertices, so deterministic point-surface fallback was used",
+              "fusion": fusion_info,
               "git": sha, "date": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
               "image_digests": {"dataset": digest(root / "iphone/long_capture"), "gt_mesh": digest(root / "gt_mesh.ply")},
               "command": f"python -m eval.score_mushroom --dataset {root} --out {a.out}"}
+    if previous:
+        old = previous.get("score")
+        if old:
+            result["fallback_point_surface"] = {"label": "previous point-surface fallback scores", "score": old,
+                                                  "fusion": previous.get("fusion", "recorded fallback")}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(result, indent=2) + "\n")
     figure(a.out.with_suffix(".png"), score)

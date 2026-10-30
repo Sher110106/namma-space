@@ -42,7 +42,8 @@ def main(argv=None):
         c2w[:3, 3] = [x, 1.2, z]
         views.append(depth_view(box_depth(c2w, K, w, h), c2w, K, name=str(i)))
     mesh_path = a.out.with_suffix(".ply")
-    mesh = fuse_depth_views(views, str(mesh_path))
+    fusion = {}
+    mesh = fuse_depth_views(views, str(mesh_path), fusion_info=fusion)
     p = np.asarray(mesh.vertices)
     b = np.array([-1.5, 1.5, -1.0, 1.0, 0.0, 2.4])
     dist = np.minimum.reduce([np.abs(p[:, 0] - b[0]), np.abs(p[:, 0] - b[1]), np.abs(p[:, 1] - b[2]),
@@ -50,7 +51,8 @@ def main(argv=None):
     result = {"schema": "namma-space/eval@1", "name": "synthetic_room", "kind": "j5_tsdf",
               "status": "pass" if len(p) and float(np.median(dist)) <= .02 else "fail",
               "views": len(views), "vertices": len(p), "median_wall_error_m": float(np.median(dist)) if len(p) else None,
-              "gate_m": .02, "voxel_size_m": .02, "sdf_trunc_m": .08, "depth_trunc_m": 5.0}
+              "gate_m": .02, "voxel_size_m": .02, "sdf_trunc_m": .08, "depth_trunc_m": 5.0,
+              "fusion": fusion}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))

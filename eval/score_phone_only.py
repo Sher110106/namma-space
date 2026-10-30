@@ -107,13 +107,12 @@ def main(argv=None):
         "fit_scale_applied": float(s_fit),
     }
 
+    previous = json.loads(a.out.read_text()) if a.out.exists() else None
     mesh_path = a.out.with_suffix(".mesh.ply")
-    if mesh_path.exists():
-        # A rerun after a metadata-only failure can reuse the completed CPU
-        # fusion; rendering is still repeated because depth maps are transient.
-        mesh = None
-    else:
-        mesh = fuse_depth_views(views, str(mesh_path), color=False)
+    # Always refusion on an evaluation rerun so the headline mesh reflects the
+    # current UniformTSDFVolume implementation rather than an old fallback PLY.
+    fusion_info = {}
+    fuse_depth_views(views, str(mesh_path), color=False, fusion_info=fusion_info)
     geometry = score_mesh(mesh_path, root / "gt_mesh.ply", root / "icp_iphone.json", pre_transform=T_fit)
     result = {
         "schema": "namma-space/eval@1", "name": a.out.stem,
@@ -137,7 +136,7 @@ def main(argv=None):
         "depth_vs_lidar": depth_score,
         "geometry": geometry,
         "headline_protocol": "cropped predicted points inside Faro mesh bbox grown by 5 cm",
-        "fusion": "Open3D ScalableTSDFVolume attempted; pinned Open3D 0.20 returned zero vertices in the synthetic probe, so deterministic point-surface fallback was used",
+        "fusion": fusion_info,
         "voxel_size_m": 0.02, "sdf_trunc_m": 0.08, "depth_trunc_m": 5.0,
         "git": (subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
                 if (run / "../.git").exists() else "unknown"),
@@ -145,6 +144,11 @@ def main(argv=None):
         "image_digests": {"dataset": digest(root / "iphone/long_capture"), "gt_mesh": digest(root / "gt_mesh.ply")},
         "command": f"python -m eval.score_phone_only --run {run} --dataset {root} --out {a.out}",
     }
+    if previous:
+        old = previous.get("geometry")
+        if old:
+            result["fallback_point_surface"] = {"label": "previous point-surface fallback geometry scores", "score": old,
+                                                  "fusion": previous.get("fusion", "recorded fallback")}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(result, indent=2) + "\n")
     _figure(a.out.with_suffix(".png"), result)

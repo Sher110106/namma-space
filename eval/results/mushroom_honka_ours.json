@@ -63,53 +63,114 @@
   },
   "geometry": {
     "raw": {
-      "accuracy_m": 0.3229722063883797,
-      "completeness_m": 0.03458872078530905,
-      "accuracy_median_m": 0.13893474903842798,
-      "completeness_median_m": 0.02703600169009769,
-      "f_score_5cm": 0.4278731205311853,
-      "precision_5cm": 0.28778617489221714,
-      "recall_5cm": 0.8336940505338336,
-      "n_ours": 297589,
-      "n_gt": 5026098
+      "accuracy_m": 0.19737448031205582,
+      "completeness_m": 0.04717824740245738,
+      "accuracy_median_m": 0.0568607781005228,
+      "completeness_median_m": 0.03558454860885464,
+      "f_score_5cm": 0.5596582425616031,
+      "precision_5cm": 0.46057,
+      "recall_5cm": 0.71307,
+      "n_ours": 100000,
+      "n_gt": 100000
     },
     "cropped": {
-      "accuracy_m": 0.18881078358930461,
-      "completeness_m": 0.03461669709066498,
-      "accuracy_median_m": 0.0871825431734323,
-      "completeness_median_m": 0.02703600169009769,
-      "f_score_5cm": 0.5148117109829825,
-      "precision_5cm": 0.37237918829841815,
-      "recall_5cm": 0.8336940505338336,
-      "n_ours": 229986,
-      "n_gt": 5026098
+      "accuracy_m": 0.09866476033893683,
+      "completeness_m": 0.047827649540691415,
+      "accuracy_median_m": 0.04251617985498686,
+      "completeness_median_m": 0.03558454860885464,
+      "f_score_5cm": 0.6300472567197449,
+      "precision_5cm": 0.5643410282801549,
+      "recall_5cm": 0.71307,
+      "n_ours": 81612,
+      "n_gt": 100000
+    },
+    "surface_sampling": {
+      "method": "Open3D sample_points_uniformly",
+      "n_per_surface": 100000
     },
     "crop": {
       "kind": "predicted_inside_gt_bbox_grown",
       "grow_m": 0.05,
       "gt_bbox_min_m": [
-        -4.112767505645752,
-        -3.369944620132446,
-        -0.03710751533508301
+        -4.111082186689,
+        -3.368897225241999,
+        -0.03647189350958873
       ],
       "gt_bbox_max_m": [
-        2.2762167930603026,
-        3.9936376094818113,
-        2.511585998535156
+        2.275900915605902,
+        3.992885031039555,
+        2.4994196722709674
       ],
-      "n_removed": 67603
+      "n_removed": 18388
     }
   },
   "headline_protocol": "cropped predicted points inside Faro mesh bbox grown by 5 cm",
-  "fusion": "Open3D ScalableTSDFVolume attempted; pinned Open3D 0.20 returned zero vertices in the synthetic probe, so deterministic point-surface fallback was used",
+  "fusion": {
+    "requested": "UniformTSDFVolume",
+    "voxel_size_m": 0.02,
+    "sdf_trunc_m": 0.08,
+    "depth_trunc_m": 5.0,
+    "origin_m": [
+      -3.4803430103758215,
+      -3.8742369022180907,
+      -5.3302775884702775
+    ],
+    "length_m": 9.700000000000001,
+    "resolution": 485,
+    "effective_voxel_size_m": 0.020000000000000004,
+    "method": "UniformTSDFVolume"
+  },
   "voxel_size_m": 0.02,
   "sdf_trunc_m": 0.08,
   "depth_trunc_m": 5.0,
   "git": "unknown",
-  "date": "2026-10-30T06:36:54+00:00",
+  "date": "2026-10-30T07:28:57+00:00",
   "image_digests": {
     "dataset": "2826c176dedb4898476b663b0a533eca15c784d637274a83ab1ecdedef6ef43f",
     "gt_mesh": "90b9471ddfdfcfc77d287f13d6eb582794fb9748386b238b5cfdee90b1d3c978"
   },
-  "command": "python -m eval.score_phone_only --run /w/runs/rh-honka --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-honka/mushroom_honka_ours.json"
+  "command": "python -m eval.score_phone_only --run /w/runs/rh-honka --dataset /w/data/mushroom/room_datasets/honka --out /w/runs/w7-honka/mushroom_honka_ours.json",
+  "fallback_point_surface": {
+    "label": "previous point-surface fallback geometry scores",
+    "score": {
+      "raw": {
+        "accuracy_m": 0.3229722063883797,
+        "completeness_m": 0.03458872078530905,
+        "accuracy_median_m": 0.13893474903842798,
+        "completeness_median_m": 0.02703600169009769,
+        "f_score_5cm": 0.4278731205311853,
+        "precision_5cm": 0.28778617489221714,
+        "recall_5cm": 0.8336940505338336,
+        "n_ours": 297589,
+        "n_gt": 5026098
+      },
+      "cropped": {
+        "accuracy_m": 0.18881078358930461,
+        "completeness_m": 0.03461669709066498,
+        "accuracy_median_m": 0.0871825431734323,
+        "completeness_median_m": 0.02703600169009769,
+        "f_score_5cm": 0.5148117109829825,
+        "precision_5cm": 0.37237918829841815,
+        "recall_5cm": 0.8336940505338336,
+        "n_ours": 229986,
+        "n_gt": 5026098
+      },
+      "crop": {
+        "kind": "predicted_inside_gt_bbox_grown",
+        "grow_m": 0.05,
+        "gt_bbox_min_m": [
+          -4.112767505645752,
+          -3.369944620132446,
+          -0.03710751533508301
+        ],
+        "gt_bbox_max_m": [
+          2.2762167930603026,
+          3.9936376094818113,
+          2.511585998535156
+        ],
+        "n_removed": 67603
+      }
+    },
+    "fusion": "Open3D ScalableTSDFVolume attempted; pinned Open3D 0.20 returned zero vertices in the synthetic probe, so deterministic point-surface fallback was used"
+  }
 }

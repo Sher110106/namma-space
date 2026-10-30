@@ -23,6 +23,8 @@ import numpy as np
 VOXEL_SIZE = 0.02
 SDF_TRUNC = 0.08
 DEPTH_TRUNC = 5.0
+MAX_UNIFORM_RESOLUTION = 512
+SURFACE_SAMPLE_POINTS = 100_000
 
 
 @dataclass
@@ -132,28 +134,84 @@ def depth_view(depth: np.ndarray, c2w: np.ndarray, K: np.ndarray, *, alpha: Opti
     return DepthView(d, a, np.asarray(c2w, float).reshape(4, 4), np.asarray(K, float).reshape(3, 3), rgb, name)
 
 
+def _rgbd(v: DepthView, *, depth_trunc: float, color: bool):
+    import open3d as o3d
+    d = np.asarray(v.depth, dtype=np.float32).copy()
+    valid = (v.alpha >= 0.5) & np.isfinite(d) & (d > 0) & (d <= depth_trunc)
+    d[~valid] = 0.0
+    di = o3d.geometry.Image(np.ascontiguousarray(d))
+    if color and v.rgb is not None:
+        rgb = np.clip(np.asarray(v.rgb) * 255.0 + 0.5, 0, 255).astype(np.uint8)
+    else:
+        rgb = np.zeros((*d.shape, 3), np.uint8)
+    ri = o3d.geometry.Image(np.ascontiguousarray(rgb))
+    return o3d.geometry.RGBDImage.create_from_color_and_depth(
+        ri, di, depth_scale=1.0, depth_trunc=float(depth_trunc),
+        convert_rgb_to_intensity=False)
+
+
+def _world_bounds(views: Sequence[DepthView], *, depth_trunc: float, sdf_trunc: float,
+                  voxel_size: float, bbox: Optional[tuple[np.ndarray, np.ndarray]] = None):
+    """Return a padded cubic world-space volume origin and side length."""
+    if bbox is not None:
+        lo, hi = (np.asarray(bbox[0], float), np.asarray(bbox[1], float))
+    else:
+        chunks = []
+        for v in views:
+            d = np.asarray(v.depth, dtype=np.float32)
+            valid = (v.alpha >= 0.5) & np.isfinite(d) & (d > 0) & (d <= depth_trunc)
+            ys, xs = np.nonzero(valid)
+            if len(xs) == 0:
+                continue
+            # The bbox only needs a sparse geometric envelope, not every pixel.
+            step = max(1, int(np.ceil(np.sqrt(len(xs) / 200_000))))
+            xs, ys = xs[::step], ys[::step]
+            z = d[ys, xs]
+            cam = np.column_stack(((xs - v.K[0, 2]) * z / v.K[0, 0],
+                                   (ys - v.K[1, 2]) * z / v.K[1, 1], z))
+            chunks.append((v.c2w[:3, :3] @ cam.T).T + v.c2w[:3, 3])
+            chunks.append(v.c2w[None, :3, 3])
+        if not chunks:
+            raise ValueError("no valid depth samples for UniformTSDFVolume bounds")
+        pts = np.concatenate(chunks, axis=0)
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+    if np.any(hi <= lo):
+        raise ValueError(f"invalid TSDF bounds {lo}..{hi}")
+    lo = lo - float(sdf_trunc)
+    hi = hi + float(sdf_trunc)
+    span = float(np.max(hi - lo))
+    # Keep a small voxel-aligned margin around the requested box.
+    length = float(np.ceil(span / float(voxel_size)) * float(voxel_size))
+    center = (lo + hi) * 0.5
+    origin = center - length * 0.5
+    resolution = int(round(length / float(voxel_size)))
+    if resolution > MAX_UNIFORM_RESOLUTION:
+        resolution = MAX_UNIFORM_RESOLUTION
+        length = float(resolution * max(length / resolution, voxel_size))
+        origin = center - length * 0.5
+    return origin, length, resolution
+
+
 def _integrate_open3d(views: Sequence[DepthView], *, voxel_size: float, sdf_trunc: float,
-                      depth_trunc: float, color: bool = True):
+                      depth_trunc: float, color: bool = True, kind: str = "scalable",
+                      bbox: Optional[tuple[np.ndarray, np.ndarray]] = None):
     try:
         import open3d as o3d
     except ImportError as exc:  # pragma: no cover - exercised on Mac without Open3D
         raise RuntimeError("Open3D is required for TSDF fusion; use namma-space-gpu on tyrone") from exc
-    volume = o3d.pipelines.integration.ScalableTSDFVolume(
-        voxel_length=float(voxel_size), sdf_trunc=float(sdf_trunc),
-        color_type=(o3d.pipelines.integration.TSDFVolumeColorType.RGB8
-                    if color else o3d.pipelines.integration.TSDFVolumeColorType.NoColor))
+    ctype = (o3d.pipelines.integration.TSDFVolumeColorType.RGB8
+             if color else o3d.pipelines.integration.TSDFVolumeColorType.NoColor)
+    if kind == "uniform":
+        origin, length, resolution = _world_bounds(
+            views, depth_trunc=depth_trunc, sdf_trunc=sdf_trunc,
+            voxel_size=voxel_size, bbox=bbox)
+        volume = o3d.pipelines.integration.UniformTSDFVolume(
+            length, resolution, float(sdf_trunc), ctype, origin)
+    else:
+        volume = o3d.pipelines.integration.ScalableTSDFVolume(
+            voxel_length=float(voxel_size), sdf_trunc=float(sdf_trunc), color_type=ctype)
     for v in views:
-        d = np.asarray(v.depth, dtype=np.float32).copy()
-        valid = (v.alpha >= 0.5) & np.isfinite(d) & (d > 0) & (d <= depth_trunc)
-        d[~valid] = 0.0
-        di = o3d.geometry.Image(np.ascontiguousarray(d))
-        if color and v.rgb is not None:
-            rgb = np.clip(np.asarray(v.rgb) * 255.0 + 0.5, 0, 255).astype(np.uint8)
-        else:
-            rgb = np.zeros((*d.shape, 3), np.uint8)
-        ri = o3d.geometry.Image(np.ascontiguousarray(rgb))
-        rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
-            ri, di, depth_scale=1.0, depth_trunc=float(depth_trunc), convert_rgb_to_intensity=False)
+        rgbd = _rgbd(v, depth_trunc=depth_trunc, color=color)
         pin = o3d.camera.PinholeCameraIntrinsic(v.width, v.height, float(v.K[0, 0]), float(v.K[1, 1]),
                                                   float(v.K[0, 2]), float(v.K[1, 2]))
         volume.integrate(rgbd, pin, np.linalg.inv(v.c2w))
@@ -162,19 +220,45 @@ def _integrate_open3d(views: Sequence[DepthView], *, voxel_size: float, sdf_trun
 
 def fuse_depth_views(views: Sequence[DepthView], out_mesh: Optional[str] = None, *,
                      voxel_size: float = VOXEL_SIZE, sdf_trunc: float = SDF_TRUNC,
-                     depth_trunc: float = DEPTH_TRUNC, color: bool = True):
-    """Fuse depth views into an Open3D ScalableTSDFVolume and optionally write PLY."""
+                     depth_trunc: float = DEPTH_TRUNC, color: bool = True,
+                     bbox: Optional[tuple[np.ndarray, np.ndarray]] = None,
+                     fusion_info: Optional[dict] = None):
+    """Fuse views with bounded UniformTSDFVolume, recording alternatives."""
     if not views:
         raise ValueError("at least one depth view is required")
-    volume = _integrate_open3d(views, voxel_size=voxel_size, sdf_trunc=sdf_trunc,
-                               depth_trunc=depth_trunc, color=color)
-    mesh = volume.extract_triangle_mesh()
-    # Some Open3D 0.20 CPU wheels silently leave ScalableTSDFVolume empty for
-    # RGB-D image formats they do not support. Keep ScalableTSDFVolume as the
-    # primary implementation, but make the stage useful on those wheels too.
-    if len(mesh.vertices) == 0:
+    info = fusion_info if fusion_info is not None else {}
+    info.update({"requested": "UniformTSDFVolume", "voxel_size_m": float(voxel_size),
+                 "sdf_trunc_m": float(sdf_trunc), "depth_trunc_m": float(depth_trunc)})
+    mesh = None
+    try:
+        origin, length, resolution = _world_bounds(
+            views, depth_trunc=depth_trunc, sdf_trunc=sdf_trunc,
+            voxel_size=voxel_size, bbox=bbox)
+        info.update({"origin_m": origin.tolist(), "length_m": float(length),
+                     "resolution": int(resolution),
+                     "effective_voxel_size_m": float(length / resolution)})
+        mesh = _integrate_open3d(views, voxel_size=voxel_size, sdf_trunc=sdf_trunc,
+                                 depth_trunc=depth_trunc, color=color, kind="uniform", bbox=bbox).extract_triangle_mesh()
+        if len(mesh.vertices):
+            info["method"] = "UniformTSDFVolume"
+        else:
+            info["uniform_vertices"] = 0
+    except Exception as exc:
+        info["uniform_error"] = f"{type(exc).__name__}: {exc}"
+    if mesh is None or len(mesh.vertices) == 0:
+        try:
+            mesh = _integrate_open3d(views, voxel_size=voxel_size, sdf_trunc=sdf_trunc,
+                                     depth_trunc=depth_trunc, color=color, kind="scalable").extract_triangle_mesh()
+            if len(mesh.vertices):
+                info["method"] = "ScalableTSDFVolume"
+            else:
+                info["scalable_vertices"] = 0
+        except Exception as exc:
+            info["scalable_error"] = f"{type(exc).__name__}: {exc}"
+    if mesh is None or len(mesh.vertices) == 0:
         mesh = _point_surface_fallback(views, depth_trunc=depth_trunc,
                                        voxel_size=voxel_size, sdf_trunc=sdf_trunc)
+        info["method"] = "point_surface_fallback"
     mesh.compute_vertex_normals()
     if out_mesh:
         Path(out_mesh).parent.mkdir(parents=True, exist_ok=True)
