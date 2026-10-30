@@ -66,3 +66,11 @@ them. ARKit poses drift too, so we do not know which side is wrong. Scale of the
   orchestration: crash, timeout, partial, exit 10, variant C, dropped cameras, missing ranges, preflight, disk gate.
 - Acceptance tests (tyrone): `cd /home/sher/namma-space/repo && bash test/unit/sfm/accept_tyrone.sh <a1|a2|a3|a4|a5|a6|c1|c2|c3a|c3a2|c3b|c3c|c4|c5>`.
 - C4 alone: `python3 -m pipeline.sfm.check_flags` inside `namma-colmap:0.2`.
+
+## Integrator change (30 Oct, 11:44 and 12:00): variant B extraction size
+COLMAP 4.2.1 stored more SIFT keypoints than `--SiftExtraction.max_num_features 8192` (databases: honka 738x994 mean
+2,846, max 14,925 per image; b7 at 1920x1080 mean 7,959, max 24,523). On 1920 px frames the SIFT LightGlue ONNX
+matcher then asked for 6.9 GB, aborted (exit -6) twice, and held 33.5 GB of GPU memory while retrying, which kept
+other jobs out of the GPU (nsdocker needs 12 GB free). `Cfg.sift_max_image_size = 1024` now caps B's extraction size
+(COLMAP scales keypoints back to full resolution). At 1280 px b7 still reached 19,358 keypoints and failed on 6.0 GB,
+hence 1024, the regime in which honka's B worked and won. Honka is unaffected (994 px).

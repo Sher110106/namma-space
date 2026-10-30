@@ -34,6 +34,13 @@ class Cfg:
     max_image_size: int = 1920
     aliked_features: int = 4096
     sift_features: int = 8192
+    # Variant B extracts SIFT at most at this size (integrator, 30 Oct). COLMAP 4.2.1 stored far more SIFT keypoints
+    # than max_num_features (honka: mean 2,846, max 14,925; b7 at 1920 px: mean 7,959, max 24,523), and the SIFT
+    # LightGlue ONNX matcher on 1920 px frames then asked for a 6.9 GB buffer and aborted (exit -6, twice). Keypoint
+    # count scales with image area. At 1280 px b7 still had a max of 19,358 keypoints and the matcher failed on a 6.0 GB
+    # buffer while holding 33.5 GB of GPU memory (11:58). 1024 px is the regime that worked on honka (994 px: max 14,925
+    # keypoints, B was the chosen variant); honka itself is not affected.
+    sift_max_image_size: int = 1024
     overlap: int = 20
     loop_detection: int = 1
     gpu: bool = True          # False: ONNX models and global positioning on the CPU (slow; no GPU slot needed)
@@ -62,7 +69,7 @@ def extract_sift_cpu(db: str, images: str, cfg: Cfg, threads: int) -> list[str]:
               "--database_path", db, "--image_path", images,
               "--ImageReader.camera_model", cfg.camera_model, "--ImageReader.single_camera", 1,
               "--FeatureExtraction.type", "SIFT", "--FeatureExtraction.use_gpu", 0,
-              "--FeatureExtraction.max_image_size", cfg.max_image_size,
+              "--FeatureExtraction.max_image_size", min(cfg.max_image_size, cfg.sift_max_image_size),
               "--FeatureExtraction.num_threads", threads,
               "--SiftExtraction.max_num_features", cfg.sift_features,
               "--SiftExtraction.domain_size_pooling", 0)

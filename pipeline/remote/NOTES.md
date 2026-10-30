@@ -101,3 +101,24 @@ Real align (W2) on the same SfM (`rh-honka30r`, `--from align --to align`): 273 
   only the dry run and the typed-phrase gate are tested.
 - `ns package` lists what is missing (the PDFs, the video, the repo zip before the first commit) instead of inventing it.
 - `ns verify` and the bundle step were only run on stub data or not at all (see the rehearsal section in test/README.md).
+
+## Integration changes on 30 Oct morning (see INTEGRATION_LOG.md for the evidence)
+
+- **Input already on tyrone.** `ns run tyrone:/abs/IMG.MOV --name N`, `ns run --frames tyrone:/abs/dir --name N`,
+  `ns check tyrone:/abs/IMG.MOV`. Under `/home/sher/namma-space` the input is a relative symlink in `runs/N/input/`
+  (containers see it under `/w`); elsewhere it is hard-linked, or copied if that fails. The check of a remote video runs
+  in `namma-space-gpu:0.1` on tyrone (no ffmpeg on the host) and `00_preflight/check.json` comes back to the Mac.
+  Drop big videos in `/home/sher/namma-space/inbox/`.
+- **Wall limits.** The runner stops a stage that runs longer than `STAGE_LIMIT_MIN` (ingest 45, sfm 150, align 30,
+  train 240, geometry 60, export 60, grid 20, rescale 15 min; `--stage-timeout STAGE=MIN`), counted from when its
+  container is seen running, and gives up after `--queue-limit-min` (240) of waiting for a slot. Exit 20, reason in
+  the stage note. The train stage has its own per-variant limit and a stall watchdog (pipeline/train/NOTES.md).
+- **Partial = 11.** A stage JSON with `"partial": true` and exit 0 becomes 11 (sfm under 95% in one model).
+- **Optional stages** (geometry) never stop the run: a failure is `exit-N-ignored` plus a warning.
+- **Mac steps count.** `ns run` ends 20 if bundle or report fail, 30 if the viewer checks fail.
+  With `--to STAGE` short of the end, the Mac steps are skipped.
+- **Pull** leaves out `60_export/*.ply` and `55_geometry/*.ply` (use `--with-ply` or `--all`).
+- **Verify** passes `60_export/parity` to the viewer harness when present (test H4b).
+- **Rescale** now reaches the grid and the bundle: `rescale.py` writes the user scale into `export.json T_final`
+  (`T_final_export` keeps the export stage's own) and scales the held-out and parity poses. `ns rescale --factor K`
+  multiplies; `--scale K` sets the total factor (1.0 = automatic).

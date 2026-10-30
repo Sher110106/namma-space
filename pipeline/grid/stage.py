@@ -255,6 +255,8 @@ def run_stage(run_dir: str, out_dir: Optional[str] = None, ply: Optional[str] = 
         "spawn": spawn, "spawn_ok": bool(spawn_ok),
         "bookmarks": bookmarks, "tour": tour, "tour_stops": tour_stops,
         "room_extent_m": ext["room_extent_m"] if ext else None,
+        # the user scale already inside T_final (ns rescale writes it into export.json); rescale.py divides it out
+        "user_scale": float(export.get("user_scale", 1.0) or 1.0) if tf_used else 1.0,
         "room_extent_axes_m": ext["extent_axes_m"] if ext else None,
         "room_axes_yaw_deg": ext["axes_yaw_deg"] if ext else None,
         "walkable_m2": round(walkable_m2, 3),

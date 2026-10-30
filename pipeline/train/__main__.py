@@ -29,6 +29,9 @@ PSNR_GATE_DB = 20.0
 TIME_GATE_S = 45 * 60
 POLL_S = 2.0
 PROGRESS_S = 8.0
+KILL_GRACE_S = 30.0      # SIGTERM -> SIGKILL
+ABANDON_S = 60.0         # SIGKILL -> give up waiting (process stuck in the driver)
+STALL_S = 900.0          # no trainer output for this long = hung (default; --stall-minutes)
 
 
 def log(msg: str) -> None:
@@ -66,6 +69,12 @@ class Job:
         self.rc: Optional[int] = None
         self.logpath = os.path.join(vdir, "log.txt")
         self.timed_out = False
+        self.end_reason = ""            # "", "timeout" or "stalled"
+        self.t_term: Optional[float] = None
+        self.t_kill: Optional[float] = None
+        self.abandoned = False
+        self._log_size = -1
+        self._log_t = 0.0
 
     @property
     def preview_path(self) -> str:
@@ -75,13 +84,14 @@ class Job:
         os.makedirs(self.vdir, exist_ok=True)
         self._lf = open(self.logpath, "wb")
         self.t0 = time.time()
+        self._log_t = self.t0
         self.proc = subprocess.Popen(self.cmd, cwd=C.TRAINER_CWD, stdout=self._lf, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, start_new_session=True)
         log(f"{self.name}: started pid {self.proc.pid}")
 
     def poll(self) -> bool:
         """True while running."""
-        if self.proc is None:
+        if self.proc is None or self.abandoned:
             return False
         if self.t_ply7k is None and os.path.isfile(self.preview_path):
             sz = os.path.getsize(self.preview_path)
@@ -99,17 +109,71 @@ class Job:
             self.t_ply7k = self.t_end - self.t0
         return False
 
-    def terminate(self) -> None:
-        if self.proc and self.proc.poll() is None:
-            self.timed_out = True
+    def terminate(self, reason: str = "timeout") -> None:
+        """Ask the trainer to stop (SIGTERM to its process group). enforce() escalates."""
+        if self.proc is None or self.rc is not None or self.t_term is not None:
+            return
+        self.end_reason = reason
+        self.timed_out = reason == "timeout"
+        self.t_term = time.time()
+        log(f"{self.name}: {reason}; SIGTERM to process group {self.proc.pid}")
+        self._signal(signal.SIGTERM)
+
+    def _signal(self, sig: int) -> None:
+        try:
+            os.killpg(self.proc.pid, sig)
+        except OSError:
             try:
-                os.killpg(self.proc.pid, signal.SIGTERM)
+                self.proc.send_signal(sig)
             except OSError:
                 pass
 
+    def enforce(self, now: float) -> bool:
+        """After terminate(): SIGKILL after KILL_GRACE_S, give up waiting after ABANDON_S more.
+        Returns True when the job must be dropped from the running list (it is gone or abandoned)."""
+        if self.t_term is None or self.proc is None:
+            return False
+        if self.proc.poll() is not None:
+            return False                     # poll() in the loop records it
+        if self.t_kill is None and now - self.t_term > KILL_GRACE_S:
+            self.t_kill = now
+            log(f"{self.name}: still alive {KILL_GRACE_S:.0f} s after SIGTERM; SIGKILL")
+            self._signal(signal.SIGKILL)
+            return False
+        if self.t_kill is not None and now - self.t_kill > ABANDON_S:
+            # unkillable (uninterruptible sleep in the driver); stop waiting so the stage can finish
+            self.rc = -9
+            self.t_end = now
+            self.abandoned = True
+            try:
+                self._lf.close()
+            except OSError:
+                pass
+            log(f"{self.name}: did not exit {ABANDON_S:.0f} s after SIGKILL; abandoned (pid {self.proc.pid})")
+            return True
+        return False
 
-def run_jobs(jobs: List[Job], parallel: bool, tmp: str, max_wall_s: float) -> Dict[str, float]:
-    """Run jobs (all at once if parallel, else one after another). Returns GPU-memory samples."""
+    def check_stall(self, now: float, stall_s: float) -> bool:
+        """True when the log has not grown for stall_s seconds (trainer hung, GPU idle)."""
+        if self.proc is None or self.rc is not None or self.t_term is not None or stall_s <= 0:
+            return False
+        try:
+            sz = os.path.getsize(self.logpath)
+        except OSError:
+            sz = -1
+        if sz != self._log_size:
+            self._log_size, self._log_t = sz, now
+            return False
+        return now - self._log_t > stall_s
+
+
+def run_jobs(jobs: List[Job], parallel: bool, tmp: str, max_wall_s: float,
+             stall_s: float = 0.0) -> Dict[str, float]:
+    """Run jobs (all at once if parallel, else one after another). Returns GPU-memory samples.
+
+    Each job has its own wall limit (max_wall_s from its start) and a stall watchdog (no log output for
+    stall_s). A job past either limit gets SIGTERM, then SIGKILL, and is abandoned if it still does not
+    exit, so this loop always ends."""
     samples = {"peak_used_mb": 0, "base_used_mb": G.gpu_used_mb() or 0}
     t_start = time.time()
     pending = list(jobs)
@@ -125,12 +189,18 @@ def run_jobs(jobs: List[Job], parallel: bool, tmp: str, max_wall_s: float) -> Di
         for j in list(running):
             if not j.poll():
                 running.remove(j)
-                log(f"{j.name}: exited rc={j.rc} after {j.t_end - j.t0:.0f} s")
-        if now - t_start > max_wall_s:
-            log(f"wall limit {max_wall_s:.0f} s reached; terminating {[j.name for j in running]}")
-            for j in running:
-                j.terminate()
-            pending.clear()
+                log(f"{j.name}: exited rc={j.rc} after {j.t_end - j.t0:.0f} s"
+                    + (f" ({j.end_reason})" if j.end_reason else ""))
+                continue
+            if j.t_term is None:
+                if now - j.t0 > max_wall_s:
+                    j.terminate("timeout")
+                    log(f"{j.name}: wall limit {max_wall_s:.0f} s reached")
+                elif j.check_stall(now, stall_s):
+                    j.terminate("stalled")
+                    log(f"{j.name}: no trainer output for {stall_s:.0f} s; treated as hung")
+            if j.enforce(now):
+                running.remove(j)
         if now - last_prog > PROGRESS_S:
             last_prog = now
             used = G.gpu_used_mb()
@@ -139,8 +209,13 @@ def run_jobs(jobs: List[Job], parallel: bool, tmp: str, max_wall_s: float) -> Di
             prog = {"elapsed_s": round(now - t_start), "variants": {}}
             for j in jobs:
                 p = S.progress_from_log(j.logpath) if os.path.exists(j.logpath) else None
+                state = "pending" if j.proc is None else ("running" if j.rc is None else ("ok" if j.rc == 0 else "failed"))
+                if j.end_reason and j.rc is None:
+                    state = "stopping"
+                elif j.end_reason:
+                    state = j.end_reason
                 prog["variants"][j.name] = {
-                    "state": "pending" if j.proc is None else ("running" if j.rc is None else ("ok" if j.rc == 0 else "failed")),
+                    "state": state,
                     "step": p[0] if p else None, "of": p[1] if p else j.opts.max_steps,
                     "preview_ply": j.preview_path if j.t_ply7k is not None else None,
                     "t_preview_s": j.t_ply7k}
@@ -179,11 +254,12 @@ def tail(path: str, n: int = 25) -> str:
 
 def finish_variant(j: Job, eval_steps: List[int], gpu_samples: dict, parallel: bool, stage: str) -> dict:
     from pipeline.export import ply_io
-    status = "ok" if j.rc == 0 else ("timeout" if j.timed_out else "failed")
+    status = "ok" if (j.rc == 0 and not j.end_reason) else (j.end_reason or "failed")
     extra: dict = {
         "status": status, "rc": j.rc, "wall_s": round((j.t_end or time.time()) - j.t0, 1),
         "t_preview_s": round(j.t_ply7k, 1) if j.t_ply7k is not None else None,
         "parallel": parallel, "cmd": " ".join(j.cmd),
+        "end_reason": j.end_reason or None, "abandoned": j.abandoned or None,
         "gpu_used_total_peak_gb": round(gpu_samples["peak_used_mb"] / 1024, 2),
         "gpu_used_total_base_gb": round(gpu_samples["base_used_mb"] / 1024, 2),
     }
@@ -198,6 +274,9 @@ def finish_variant(j: Job, eval_steps: List[int], gpu_samples: dict, parallel: b
     ply_path = os.path.join(j.vdir, "ply", ply_name)
     if final_step is not None and final_step != eval_steps[-1]:
         extra["partial"] = True
+        extra["partial_step"] = final_step
+        # the record's headline metrics are those of the last step that was evaluated (the 7k preview)
+        steps_for_rec = eval_steps[:eval_steps.index(final_step) + 1]
     if os.path.isfile(ply_path):
         n_ply = ply_io.count_vertices(ply_path)
         extra["final_ply"] = f"{stage}/{j.name}/ply/{ply_name}"   # relative to the run directory
@@ -243,7 +322,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--no-scene-unit", action="store_true",
                     help="do not rescale MCMC noise and scale_reg by the scene unit (reproduces the failure)")
     ap.add_argument("--cap-max", type=int, default=1_500_000)
-    ap.add_argument("--max-minutes", type=float, default=60.0)
+    ap.add_argument("--max-minutes", type=float, default=None,
+                    help="wall limit per variant, from its own start (default 90 full, 30 quick)")
+    ap.add_argument("--stall-minutes", type=float, default=STALL_S / 60,
+                    help="stop a variant whose log shows no output for this long (0 = off)")
     ap.add_argument("--keep-losers", action="store_true")
     ap.add_argument("--force", action="store_true", help="redo even if train.json exists")
     ap.add_argument("--stage-dir", default=STAGE, help="output directory name inside the run (default 50_train)")
@@ -279,6 +361,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parallel, lock, why_par = G.decide_parallel(a.parallel, len(names), a.lock_dir)
     log(why_par)
     eval_steps = C.TrainOpts("", "", quick=a.quick).eval_steps
+    max_wall_s = 60 * (a.max_minutes if a.max_minutes is not None else (30.0 if a.quick else 90.0))
+    stall_s = 60 * a.stall_minutes
     t_stage = time.time()
 
     def mk_jobs(vnames: List[str]) -> List[Job]:
@@ -301,27 +385,46 @@ def main(argv: Optional[List[str]] = None) -> int:
         log(f"scene unit k = {k:.4f} model units (median camera distance); noise_lr/k^2, scale_reg/k")
     jobs = mk_jobs(names)
     try:
-        samples = run_jobs(jobs, parallel, tmp, a.max_minutes * 60)
+        samples = run_jobs(jobs, parallel, tmp, max_wall_s, stall_s)
     finally:
         if lock:
             lock.release()
     recs = [finish_variant(j, eval_steps, samples, parallel, a.stage_dir) for j in jobs]
 
     complete = [r for r in recs if S.usable(r) and not r.get("partial")]
-    if not complete and "r0nb" not in names:
+    stopped = [r["name"] for r in recs if r.get("status") in ("timeout", "stalled")]
+    for r in recs:
+        if r.get("status") in ("timeout", "stalled"):
+            warnings.append(f"{r['name']}: {r['status']} after {r.get('wall_s')} s"
+                            + (" (process abandoned)" if r.get("abandoned") else ""))
+    any_usable = any(S.usable(r) or (r.get("partial") and r.get("psnr") is not None) for r in recs)
+    # r0nb is the NaN/crash fallback. After a timeout or stall, a 7k model (if any) is the next rung (6.5);
+    # another full run would only repeat the wait.
+    if not complete and "r0nb" not in names and not (stopped and any_usable):
         # NaN guard / crash: step down to R0 without the bilateral grid (fallback ladder)
         log("no complete usable variant; retrying as r0nb (no bilateral grid)")
         warnings.append("fallback: r0nb (no bilateral grid) after r0/r1 failed or produced NaN")
         j2 = mk_jobs(["r0nb"])
-        s2 = run_jobs(j2, False, tmp, a.max_minutes * 60)
+        s2 = run_jobs(j2, False, tmp, max_wall_s, stall_s)
         recs.append(finish_variant(j2[0], eval_steps, s2, False, a.stage_dir))
 
     pool = [r for r in recs if S.usable(r) and not r.get("partial")]
     degraded = False
-    if not pool:
-        pool = [r for r in recs if S.usable(r)]
-        degraded = bool(pool)
-    chosen, why = S.choose(pool)
+    if pool:
+        chosen, why = S.choose(pool)
+    else:
+        # fallback ladder 6.5, last rung: a partial model (the 7k PLY) of a variant that timed out,
+        # stalled or crashed after its 7k evaluation
+        part = [r for r in recs if r.get("partial") and r.get("final_ply") and r.get("psnr") is not None
+                and not r.get("nan_dropped")]
+        degraded = bool(part)
+        if part:
+            best_p = max(part, key=lambda r: r["psnr"])
+            chosen = best_p["name"]
+            why = (f"{chosen} stopped ({best_p.get('status')}) after its step-{best_p.get('partial_step')} "
+                   f"evaluation; best held-out PSNR among partial models")
+        else:
+            chosen, why = S.choose([])
     if degraded and chosen:
         why = "DEGRADED (7k model only): " + why
         warnings.append("only a partial (7k) model exists")

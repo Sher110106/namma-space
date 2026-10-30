@@ -85,3 +85,14 @@ three.js rotate by -90 degrees about X. `T_final` is identity in the sample's ex
 
 ## Tests
 `pipeline/export/.venv/bin/python -m unittest discover -s test/unit/export` (venv: numpy 2.5, scipy 1.18, Mac).
+
+## Integrator changes (30 Oct)
+- **Step 3 (huge splats) is chosen by its PSNR cost**, like step 4: the first axis limit of 1, 2, 4, 8 m costing
+  <= 0.10 dB, else skipped (`--huge-axis auto`; `clean.details.huge_search`). On MuSHRoom vr_room the 1 m rule removed
+  312 splats (its plain walls and ceiling) and cost 2.01 dB; 8 m was chosen (6 splats, 0.002 dB). Honka: 1 m cost
+  0.07 dB. The outside-box search no longer re-applies step 3 to its held subset.
+- **Floor offset**: `measure_floor_local` (median height of opaque splats within 0.20 m of the align floor and 1.5 m
+  of the path) replaces the lowest-peak rule, which found splats under the floor on both rooms (honka -0.317 m,
+  vr_room -0.123 m; the grid measured the floor at -0.009 and +0.011 m). Applied up to 0.15 m; the old rule's value is
+  kept in `T_final.info.lowest_peak_rule` and warned about when they differ by > 0.10 m.
+- A user scale recorded in `40_align/rescale.json` is composed into `T_final` again after a re-export.

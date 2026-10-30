@@ -94,6 +94,36 @@ class TestRescale(unittest.TestCase):
         self.assertAlmostEqual(v["ratio_geomean"], 1.0, places=6)
         shutil.rmtree(d)
 
+    def test_user_scale_reaches_export_json_and_poses(self):
+        """ns rescale must change what grid and bundle read: export.json T_final and the held-out poses."""
+        d = make_run()
+        os.makedirs(os.path.join(d, "60_export", "heldout"))
+        tf = {"scale": 1.0, "quaternion": [0, 0, 0, 1], "translation": [0.0, -0.02, 0.0],
+              "matrix": [1, 0, 0, 0, 0, 1, 0, -0.02, 0, 0, 1, 0, 0, 0, 0, 1], "info": {"method": "floor"}}
+        json.dump({"T_final": tf, "sd": {"count": 10}}, open(os.path.join(d, "60_export", "export.json"), "w"))
+        json.dump([{"id": "000008", "position": [1.0, 1.4, -2.0], "quaternion": [0, 0, 0, 1]}],
+                  open(os.path.join(d, "60_export", "heldout", "heldout.json"), "w"))
+        self.assertEqual(rescale.main(["--run", d, "--set-total", "1.5"]), 0)
+        ej = json.load(open(os.path.join(d, "60_export", "export.json")))
+        self.assertEqual(ej["T_final_export"], tf)
+        m = ej["T_final"]["matrix"]
+        self.assertAlmostEqual(m[0], 1.5)
+        self.assertAlmostEqual(m[5], 1.5)
+        self.assertAlmostEqual(m[7], -0.03)          # floor offset first, then the scale: the floor stays at y = 0
+        self.assertAlmostEqual(ej["T_final"]["scale"], 1.5)
+        self.assertEqual(ej["user_scale"], 1.5)
+        ho = json.load(open(os.path.join(d, "60_export", "heldout", "heldout.json")))
+        for got, want in zip(ho[0]["position"], [1.5, 2.1, -3.0]):
+            self.assertAlmostEqual(got, want)
+        # idempotent and reversible: composed from the export stage's originals
+        self.assertEqual(rescale.main(["--run", d, "--set-total", "1.5"]), 0)
+        self.assertAlmostEqual(json.load(open(os.path.join(d, "60_export", "export.json")))["T_final"]["matrix"][0], 1.5)
+        self.assertEqual(rescale.main(["--run", d, "--reset"]), 0)
+        ej = json.load(open(os.path.join(d, "60_export", "export.json")))
+        self.assertAlmostEqual(ej["T_final"]["matrix"][7], -0.02)
+        self.assertEqual(json.load(open(os.path.join(d, "60_export", "heldout", "heldout.json")))[0]["position"], [1.0, 1.4, -2.0])
+        shutil.rmtree(d)
+
     def test_refuses_absurd_factor_and_missing_align(self):
         d = make_run()
         self.assertEqual(rescale.main(["--run", d, "--scale", "9"]), 20)

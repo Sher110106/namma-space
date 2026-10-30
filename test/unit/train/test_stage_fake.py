@@ -6,6 +6,7 @@ import struct
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
@@ -31,7 +32,17 @@ FAKE = textwrap.dedent('''
     def ply(path, n):
         hdr = "ply\\nformat binary_little_endian 1.0\\nelement vertex %d\\nproperty float x\\nproperty float y\\nproperty float z\\nend_header\\n" % n
         open(path, "wb").write(hdr.encode() + struct.pack("<3f", 0, 0, 0) * n)
+    hang = os.environ.get("FAKE_HANG")      # "ignore": ignore SIGTERM; "silent": stop writing output
     for step in ([6999] if quick else [6999, 29999]):
+        if hang and step == 29999:
+            import signal
+            if hang == "ignore":
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                while True:
+                    print("loss=0.1| : 70%%| 21000/30000 [00:01<00:01, 9.0it/s]", flush=True)
+                    time.sleep(0.05)
+            while True:
+                time.sleep(1)
         print("loss=0.1| : 50%%| %d/30000 [00:01<00:01, 9.0it/s]" % step, flush=True)
         time.sleep(0.15)
         n = 1000 + step % 7
@@ -64,6 +75,8 @@ class FakeStage(unittest.TestCase):
         G.gpu_free_mb = lambda: 40000
         G.gpu_used_mb = lambda: 8000
         G.try_extra_slot = lambda lock_dir=None: None
+        self.old_grace = (M.KILL_GRACE_S, M.ABANDON_S)
+        M.KILL_GRACE_S, M.ABANDON_S = 0.5, 0.5
         self.run_dir = os.path.join(self.tmp, "run")
         make_data(os.path.join(self.run_dir, "40_align"))
 
@@ -72,6 +85,8 @@ class FakeStage(unittest.TestCase):
         C.TRAINER, C.TRAINER_CWD, M.POLL_S, G.gpu_free_mb, G.try_extra_slot, G.gpu_used_mb, M.free_gb, C.PYTHON = self.old
         shutil.rmtree(self.tmp, ignore_errors=True)
         os.environ.pop("FAKE_FAIL_R1", None)
+        os.environ.pop("FAKE_HANG", None)
+        self.M.KILL_GRACE_S, self.M.ABANDON_S = self.old_grace
 
     def stage(self, *extra):
         # the fake needs the real colmap model for the scene unit: skip it
@@ -125,6 +140,36 @@ class FakeStage(unittest.TestCase):
         self.assertEqual(tj["chosen_ply"], "50_train/r0/ply/point_cloud_6999.ply")
         self.assertTrue(tj["quick"])
         self.assertEqual(rc, 0)
+
+    def test_wall_limit_kills_a_trainer_that_ignores_sigterm(self):
+        # the 5-hour loop of 30 Oct: SIGTERM ignored, the stage printed "terminating" forever
+        os.environ["FAKE_HANG"] = "ignore"
+        t0 = time.time()
+        rc = self.stage("--variants", "r0", "--max-minutes", "0.03")
+        self.assertLess(time.time() - t0, 20)
+        tj = json.load(open(os.path.join(self.run_dir, "50_train", "train.json")))
+        r0 = tj["variants"][0]
+        self.assertEqual(r0["status"], "timeout")
+        self.assertEqual(r0["end_reason"], "timeout")
+        self.assertTrue(r0["partial"])
+        # the 7k model is the last rung of the ladder: shipped, flagged, exit 30
+        self.assertEqual(tj["chosen"], "r0")
+        self.assertEqual(tj["chosen_ply"], "50_train/r0/ply/point_cloud_6999.ply")
+        self.assertTrue(os.path.isfile(os.path.join(self.run_dir, tj["chosen_ply"])))
+        self.assertTrue(any("timeout" in w for w in tj["warnings"]))
+        self.assertEqual(rc, 30)
+        # no r0nb retry after a timeout
+        self.assertEqual([v["name"] for v in tj["variants"]], ["r0"])
+
+    def test_stall_watchdog_stops_a_silent_trainer(self):
+        os.environ["FAKE_HANG"] = "silent"
+        t0 = time.time()
+        rc = self.stage("--variants", "r0", "--stall-minutes", "0.03")
+        self.assertLess(time.time() - t0, 20)
+        tj = json.load(open(os.path.join(self.run_dir, "50_train", "train.json")))
+        self.assertEqual(tj["variants"][0]["status"], "stalled")
+        self.assertEqual(tj["chosen"], "r0")
+        self.assertEqual(rc, 30)
 
     def test_missing_model_is_infrastructure_error(self):
         shutil.rmtree(os.path.join(self.run_dir, "40_align", "sparse"))

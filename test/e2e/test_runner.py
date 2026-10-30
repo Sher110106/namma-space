@@ -85,7 +85,7 @@ class RunnerBase(unittest.TestCase):
 class FullRun(RunnerBase):
     def test_all_stages_run_in_order_and_write_files(self):
         run = make_run(self.tmp, "full")
-        r = self.run_runner("full", "--quick", "--git", "abc123")
+        r = self.run_runner("full", "--quick", "--git", "abc123", "--with-optional")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         for stage, rel in STAGE_JSON.items():
             self.assertTrue((run / rel).exists(), rel)
@@ -101,9 +101,9 @@ class FullRun(RunnerBase):
 
     def test_second_run_skips_everything(self):
         run = make_run(self.tmp, "again")
-        self.assertEqual(self.run_runner("again").returncode, 0)
+        self.assertEqual(self.run_runner("again", "--with-optional").returncode, 0)
         before = {rel: (run / rel).stat().st_mtime_ns for rel in STAGE_JSON.values()}
-        r = self.run_runner("again")
+        r = self.run_runner("again", "--with-optional")
         self.assertEqual(r.returncode, 0)
         self.assertEqual(before, {rel: (run / rel).stat().st_mtime_ns for rel in STAGE_JSON.values()})
         self.assertEqual(starts(run, "ingest"), 1)
@@ -274,6 +274,46 @@ class ExitCodes(RunnerBase):
         self.assertTrue(any("quality gate failed: stub gate flag" in w for w in rj["warnings"]))
         self.assertEqual(status(run)["stages"]["align"]["state"], "exit-30")
         self.assertEqual(status(run)["state"], "review")
+
+    def test_hung_stage_is_stopped_at_its_wall_limit(self):
+        """A stage that never ends (the 5-hour training loop of 30 Oct) is stopped and recorded as exit 20."""
+        run = make_run(self.tmp, "hang", {"train": {"sleep": 600}})
+        env = dict(os.environ, NS_RUNNER_BEAT_S="0.3")
+        t0 = time.monotonic()
+        r = subprocess.run(runner_cmd(self.tmp, "hang", "--stage-timeout", "train=0.03"), capture_output=True,
+                           text=True, timeout=60, env=env)
+        self.assertLess(time.monotonic() - t0, 30)
+        self.assertEqual(r.returncode, 20, r.stdout)
+        tr = status(run)["stages"]["train"]
+        self.assertEqual(tr["state"], "exit-20")
+        self.assertIn("stage limit", tr["note"])
+        self.assertFalse((run / "60_export").exists())
+        self.assertIn("stage limit", (run / "logs" / "train.log").read_text())
+
+    def test_partial_sfm_json_gives_11_and_the_run_continues(self):
+        run = make_run(self.tmp, "p11", {"sfm": {"json_extra": {"partial": True, "why": "partial: B 94.6%"}}})
+        r = self.run_runner("p11")
+        self.assertEqual(r.returncode, 11, r.stdout)
+        self.assertTrue((run / "70_grid" / "grid.json").exists())
+        self.assertEqual(status(run)["stages"]["sfm"]["state"], "exit-11")
+        self.assertEqual(status(run)["state"], "partial")
+        self.assertIn("B 94.6%", status(run)["stages"]["sfm"]["note"])
+
+    def test_optional_stage_failure_does_not_stop_the_run(self):
+        run = make_run(self.tmp, "opt", {"geometry": {"exit": 20}})
+        r = self.run_runner("opt", "--with-optional")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertTrue((run / "70_grid" / "grid.json").exists())
+        self.assertEqual(status(run)["stages"]["geometry"]["state"], "exit-20-ignored")
+        self.assertTrue(any("geometry (optional)" in w for w in json.loads((run / "run.json").read_text())["warnings"]))
+
+    def test_optional_stage_runs_only_when_asked(self):
+        run = make_run(self.tmp, "optin")
+        self.assertEqual(self.run_runner("optin").returncode, 0)
+        self.assertEqual(status(run)["stages"]["geometry"]["state"], "skipped-optional")
+        self.assertEqual(starts(run, "geometry"), 0)
+        self.assertEqual(self.run_runner("optin", "--only", "geometry").returncode, 0)
+        self.assertEqual(starts(run, "geometry"), 1)
 
     def test_unknown_exit_code_maps_to_20(self):
         make_run(self.tmp, "e7", {"align": {"exit": 7}})

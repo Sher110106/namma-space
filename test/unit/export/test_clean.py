@@ -74,6 +74,25 @@ class CleanSteps(unittest.TestCase):
         self.assertIsNotNone(fy)
         self.assertAlmostEqual(fy, 0.12, delta=0.03)
 
+    def test_floor_local_ignores_a_peak_under_the_floor(self):
+        """vr_room and honka: the lowest-peak rule picked splats under the floor; the local rule must not."""
+        rng = np.random.default_rng(1)
+        n = 30000
+        s = base(n)
+        s.means[:, 0] = rng.uniform(-2, 2, n)
+        s.means[:, 2] = rng.uniform(-2, 2, n)
+        r = rng.random(n)
+        s.means[:, 1] = np.where(r < 0.5, rng.normal(0.03, 0.01, n),                 # the floor, 3 cm above y = 0
+                                 np.where(r < 0.7, rng.normal(-0.30, 0.01, n),       # junk under the floor
+                                          rng.uniform(0.2, 2.5, n)))
+        s.scale[:] = np.log(0.03)
+        s.opacity[:] = 3.0
+        cams = np.array([[0, 1.4, 0], [1, 1.5, 1]])
+        fy_peak, _ = CL.measure_floor_y(s, cams)
+        fy, info = CL.measure_floor_local(s, cams)
+        self.assertAlmostEqual(fy_peak, -0.30, delta=0.03)      # the old rule is fooled
+        self.assertAlmostEqual(fy, 0.03, delta=0.01)
+
 
 if __name__ == "__main__":
     unittest.main()

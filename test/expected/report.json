@@ -1,0 +1,1033 @@
+{
+  "schema": "namma-space/expected@1",
+  "doc": "Measured values of reference runs with tolerance bands. Compare a new run with: python3 test/e2e/check_expected.py runs/<name>/report.json --expected test/expected/report.json --case <case>. 'measured' is what the reference run produced; 'range' is the accepted band ([lo, hi], null = open). Bands are judgement calls (see test/e2e/freeze_expected.py), not measured spreads. Plan thresholds are in gates.json.",
+  "cases": {
+    "honka": {
+      "source_run": "rh-honka",
+      "git": "2a5add6-dirty",
+      "frozen": "2026-10-30T11:27:49+05:30",
+      "command": "./ns run --frames tyrone:/home/sher/namma-space/data/mushroom/room_datasets/honka/iphone/long_capture/images --name rh-honka --kind public --license \"CC BY 4.0\" --attribution \"MuSHRoom dataset (Ren et al. 2024), room honka, iPhone long capture\" --title \"MuSHRoom honka (public test room)\" --source \"MuSHRoom honka, iPhone long capture, 335 frames\" --opt train:--parallel=no",
+      "note": "30 Oct 09:20-11:15 IST, rh-honka. Training ran r0 then r1 (--parallel=no, to leave a GPU slot free) next to other jobs, so train time is about twice a parallel run. Align ran before the 10:19 plane-cue fix (up error 2.0 deg; re-estimate with the fix 1.36 deg) and before the 11:22 export floor fix (T_final stayed identity because the old rule's -0.317 m exceeded its 0.30 m limit; the new rule measures about -0.01 m). The Mac steps were redone by hand after the Mac disk filled (ENOSPC). Viewer R9/R10 fail (viewer-side, scene without places).",
+      "quick": false,
+      "timings_s": {
+        "ingest": 6.06,
+        "sfm": 1015.55,
+        "align": 5.68,
+        "train": 5155.65,
+        "geometry": 154.87,
+        "export": 52.63,
+        "grid": 1.77,
+        "total": 6392.21
+      },
+      "values": [
+        {
+          "id": "frames.n_kept",
+          "path": "frames.n_kept",
+          "measured": 335,
+          "range": [
+            335.0,
+            335.0
+          ],
+          "tolerance": "abs 0",
+          "why": "same input, deterministic ingest"
+        },
+        {
+          "id": "sfm.reg_frac",
+          "path": "sfm.variants[chosen].reg_frac",
+          "measured": 0.9463,
+          "range": [
+            0.9063,
+            0.9863
+          ],
+          "tolerance": "abs 0.04",
+          "why": "mapper order and GPU matching vary"
+        },
+        {
+          "id": "sfm.reproj_px",
+          "path": "sfm.variants[chosen].reproj_px",
+          "measured": 0.7432,
+          "range": [
+            0.5932,
+            0.8932
+          ],
+          "tolerance": "abs 0.15"
+        },
+        {
+          "id": "sfm.n_pts",
+          "path": "sfm.variants[chosen].n_pts",
+          "measured": 47741,
+          "range": [
+            35805.75,
+            59676.25
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "align.up_resid_deg",
+          "path": "align.up_resid_deg",
+          "measured": 4.156731315749199,
+          "range": [
+            null,
+            6.1567
+          ],
+          "tolerance": "cap 5.0",
+          "why": "varies run to run (0.0 and 3.3 deg on the same 60 frames); upper bound max(value + 2, 5)"
+        },
+        {
+          "id": "align.h_cap_m",
+          "path": "align.h_cap_m",
+          "measured": 1.4,
+          "range": [
+            1.25,
+            1.55
+          ],
+          "tolerance": "abs 0.15",
+          "why": "1.40 m by construction with the camera-height cue alone"
+        },
+        {
+          "id": "align.scale.pct_68",
+          "path": "align.scale.pct_68",
+          "measured": 12.749685157937574,
+          "range": [
+            11.7497,
+            13.7497
+          ],
+          "tolerance": "abs 1.0"
+        },
+        {
+          "id": "train.psnr",
+          "path": "train.variants[chosen].psnr",
+          "measured": 21.35445785522461,
+          "range": [
+            20.7545,
+            21.9545
+          ],
+          "tolerance": "abs 0.6",
+          "why": "gsplat runs vary (plan: quote +-0.2 dB); SfM varies too"
+        },
+        {
+          "id": "train.ssim",
+          "path": "train.variants[chosen].ssim",
+          "measured": 0.8116697669029236,
+          "range": [
+            0.7817,
+            0.8417
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.lpips",
+          "path": "train.variants[chosen].lpips",
+          "measured": 0.22491203248500824,
+          "range": [
+            0.1949,
+            0.2549
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.cc_psnr",
+          "path": "train.variants[chosen].cc_psnr",
+          "measured": 25.04815673828125,
+          "range": [
+            24.4482,
+            25.6482
+          ],
+          "tolerance": "abs 0.6"
+        },
+        {
+          "id": "train.n_gs",
+          "path": "train.variants[chosen].n_gs",
+          "measured": 1500000,
+          "range": [
+            1350000.0,
+            1650000.0
+          ],
+          "tolerance": "rel 0.1",
+          "why": "MCMC fills its cap (1.5 M) on a full run"
+        },
+        {
+          "id": "export.sd.count",
+          "path": "export.sd.count",
+          "measured": 629993,
+          "range": [
+            566993.7,
+            692992.3
+          ],
+          "tolerance": "rel 0.1"
+        },
+        {
+          "id": "export.sd.mb",
+          "path": "export.sd.mb",
+          "measured": 16.088,
+          "range": [
+            12.8704,
+            19.3056
+          ],
+          "tolerance": "rel 0.2"
+        },
+        {
+          "id": "export.sd.psnr",
+          "path": "export.sd.psnr",
+          "measured": 21.028267526216176,
+          "range": [
+            20.3283,
+            21.7283
+          ],
+          "tolerance": "abs 0.7"
+        },
+        {
+          "id": "grid.walkable_m2",
+          "path": "grid.walkable_m2",
+          "measured": 12.893,
+          "range": [
+            9.6698,
+            16.1163
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "grid.path_coverage",
+          "path": "grid.path_coverage",
+          "measured": 1.0,
+          "range": [
+            0.95,
+            null
+          ],
+          "tolerance": "lo 0.05"
+        },
+        {
+          "id": "grid.room_extent_m.0",
+          "path": "grid.room_extent_m[0]",
+          "measured": 6.331,
+          "range": [
+            6.031,
+            6.631
+          ],
+          "tolerance": "abs 0.3",
+          "why": "longer wall-to-wall extent"
+        },
+        {
+          "id": "grid.room_extent_m.1",
+          "path": "grid.room_extent_m[1]",
+          "measured": 4.449,
+          "range": [
+            4.149,
+            4.749
+          ],
+          "tolerance": "abs 0.3",
+          "why": "shorter wall-to-wall extent"
+        },
+        {
+          "id": "walls.penetrations",
+          "path": "walls.penetrations",
+          "measured": 0,
+          "range": [
+            0.0,
+            0.0
+          ],
+          "tolerance": "abs 0",
+          "why": "must stay 0"
+        },
+        {
+          "id": "viewer.fps_mean",
+          "path": "viewer.devices[*].fps_mean",
+          "measured": 59.8,
+          "range": [
+            54.8,
+            null
+          ],
+          "tolerance": "lo 5.0",
+          "why": "M1 headless Chrome, vsync-capped at 60"
+        },
+        {
+          "id": "viewer.first_frame_s",
+          "path": "viewer.devices[*].first_frame_s",
+          "measured": 0.416,
+          "range": [
+            null,
+            1.248
+          ],
+          "tolerance": "hi 2.0",
+          "why": "localhost"
+        },
+        {
+          "id": "timings.total",
+          "path": "timings.total",
+          "measured": 6392.21,
+          "range": [
+            null,
+            11186.3675
+          ],
+          "tolerance": "hi 0.75",
+          "why": "shared GPU: queueing for a slot dominates the spread"
+        }
+      ],
+      "metric_check": {
+        "n_matched": 316,
+        "n_fit": 221,
+        "scale_error_pct": 3.2637761191049997,
+        "scale_error_pct_plain": 4.10211634885802,
+        "up_error_deg": 2.0000793666250383,
+        "residual_m": {
+          "median": 0.012029606844716614,
+          "p90": 0.04381826002788963,
+          "median_fit_set": 0.00981677900409676
+        },
+        "note": "trimmed Umeyama (70%, 8 rounds) of our aligned camera centres onto the dataset centres; scale_error_pct = 100 (1/s_fit - 1), + means our model is larger than the dataset's metric frame"
+      }
+    },
+    "vrroom": {
+      "source_run": "rh-vrroom",
+      "git": "a57c8c1-dirty",
+      "frozen": "2026-10-30T11:27:49+05:30",
+      "command": "./ns run --frames tyrone:/home/sher/namma-space/data/mushroom/room_datasets/vr_room/iphone/long_capture/images --name rh-vrroom --kind public --license \"CC BY 4.0\" --attribution \"MuSHRoom dataset (Ren et al. 2024), room vr_room, iPhone long capture\" --title \"MuSHRoom vr_room (public test room)\"",
+      "note": "30 Oct 09:47-11:26 IST, rh-vrroom. Unattended through ingest, SfM and the first align (which correctly failed its gate: up 4.2 deg off). Three manual steps, all in run.json manual_overrides: restart --from align after the plane-cue fix (10:20), --from export after the huge-splat fix (11:15) and after the floor fix (11:24). r1 (depth loss) crashed after 46 s (CUDA assert in MCMC relocate); r0 shipped. Viewer R9/R10 fail (viewer-side).",
+      "quick": false,
+      "timings_s": {
+        "ingest": 7.31,
+        "sfm": 1441.5,
+        "align": 5.06,
+        "train": 2748.78,
+        "export": 155.11,
+        "grid": 1.78,
+        "total": 4359.54
+      },
+      "values": [
+        {
+          "id": "frames.n_kept",
+          "path": "frames.n_kept",
+          "measured": 422,
+          "range": [
+            422.0,
+            422.0
+          ],
+          "tolerance": "abs 0",
+          "why": "same input, deterministic ingest"
+        },
+        {
+          "id": "sfm.reg_frac",
+          "path": "sfm.variants[chosen].reg_frac",
+          "measured": 0.9953,
+          "range": [
+            0.9553,
+            1.0353
+          ],
+          "tolerance": "abs 0.04",
+          "why": "mapper order and GPU matching vary"
+        },
+        {
+          "id": "sfm.reproj_px",
+          "path": "sfm.variants[chosen].reproj_px",
+          "measured": 0.4482,
+          "range": [
+            0.2982,
+            0.5982
+          ],
+          "tolerance": "abs 0.15"
+        },
+        {
+          "id": "sfm.n_pts",
+          "path": "sfm.variants[chosen].n_pts",
+          "measured": 30409,
+          "range": [
+            22806.75,
+            38011.25
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "align.up_resid_deg",
+          "path": "align.up_resid_deg",
+          "measured": 1.7434667115106393,
+          "range": [
+            null,
+            5.0
+          ],
+          "tolerance": "cap 5.0",
+          "why": "varies run to run (0.0 and 3.3 deg on the same 60 frames); upper bound max(value + 2, 5)"
+        },
+        {
+          "id": "align.h_cap_m",
+          "path": "align.h_cap_m",
+          "measured": 1.4,
+          "range": [
+            1.25,
+            1.55
+          ],
+          "tolerance": "abs 0.15",
+          "why": "1.40 m by construction with the camera-height cue alone"
+        },
+        {
+          "id": "align.scale.pct_68",
+          "path": "align.scale.pct_68",
+          "measured": 12.749685157937574,
+          "range": [
+            11.7497,
+            13.7497
+          ],
+          "tolerance": "abs 1.0"
+        },
+        {
+          "id": "train.psnr",
+          "path": "train.variants[chosen].psnr",
+          "measured": 23.971668243408203,
+          "range": [
+            23.3717,
+            24.5717
+          ],
+          "tolerance": "abs 0.6",
+          "why": "gsplat runs vary (plan: quote +-0.2 dB); SfM varies too"
+        },
+        {
+          "id": "train.ssim",
+          "path": "train.variants[chosen].ssim",
+          "measured": 0.869629442691803,
+          "range": [
+            0.8396,
+            0.8996
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.lpips",
+          "path": "train.variants[chosen].lpips",
+          "measured": 0.2446969747543335,
+          "range": [
+            0.2147,
+            0.2747
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.cc_psnr",
+          "path": "train.variants[chosen].cc_psnr",
+          "measured": 26.527040481567383,
+          "range": [
+            25.927,
+            27.127
+          ],
+          "tolerance": "abs 0.6"
+        },
+        {
+          "id": "train.n_gs",
+          "path": "train.variants[chosen].n_gs",
+          "measured": 1500000,
+          "range": [
+            1350000.0,
+            1650000.0
+          ],
+          "tolerance": "rel 0.1",
+          "why": "MCMC fills its cap (1.5 M) on a full run"
+        },
+        {
+          "id": "export.sd.count",
+          "path": "export.sd.count",
+          "measured": 646048,
+          "range": [
+            581443.2,
+            710652.8
+          ],
+          "tolerance": "rel 0.1"
+        },
+        {
+          "id": "export.sd.mb",
+          "path": "export.sd.mb",
+          "measured": 15.689,
+          "range": [
+            12.5512,
+            18.8268
+          ],
+          "tolerance": "rel 0.2"
+        },
+        {
+          "id": "export.sd.psnr",
+          "path": "export.sd.psnr",
+          "measured": 23.5457510745221,
+          "range": [
+            22.8458,
+            24.2458
+          ],
+          "tolerance": "abs 0.7"
+        },
+        {
+          "id": "grid.walkable_m2",
+          "path": "grid.walkable_m2",
+          "measured": 12.345,
+          "range": [
+            9.2588,
+            15.4313
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "grid.path_coverage",
+          "path": "grid.path_coverage",
+          "measured": 1.0,
+          "range": [
+            0.95,
+            null
+          ],
+          "tolerance": "lo 0.05"
+        },
+        {
+          "id": "grid.room_extent_m.0",
+          "path": "grid.room_extent_m[0]",
+          "measured": 4.901,
+          "range": [
+            4.601,
+            5.201
+          ],
+          "tolerance": "abs 0.3",
+          "why": "longer wall-to-wall extent"
+        },
+        {
+          "id": "grid.room_extent_m.1",
+          "path": "grid.room_extent_m[1]",
+          "measured": 4.041,
+          "range": [
+            3.741,
+            4.341
+          ],
+          "tolerance": "abs 0.3",
+          "why": "shorter wall-to-wall extent"
+        },
+        {
+          "id": "walls.penetrations",
+          "path": "walls.penetrations",
+          "measured": 0,
+          "range": [
+            0.0,
+            0.0
+          ],
+          "tolerance": "abs 0",
+          "why": "must stay 0"
+        },
+        {
+          "id": "viewer.fps_mean",
+          "path": "viewer.devices[*].fps_mean",
+          "measured": 59.6,
+          "range": [
+            54.6,
+            null
+          ],
+          "tolerance": "lo 5.0",
+          "why": "M1 headless Chrome, vsync-capped at 60"
+        },
+        {
+          "id": "viewer.first_frame_s",
+          "path": "viewer.devices[*].first_frame_s",
+          "measured": 0.303,
+          "range": [
+            null,
+            0.909
+          ],
+          "tolerance": "hi 2.0",
+          "why": "localhost"
+        },
+        {
+          "id": "timings.total",
+          "path": "timings.total",
+          "measured": 4359.54,
+          "range": [
+            null,
+            7629.195
+          ],
+          "tolerance": "hi 0.75",
+          "why": "shared GPU: queueing for a slot dominates the spread"
+        }
+      ],
+      "metric_check": {
+        "n_matched": 420,
+        "n_fit": 294,
+        "scale_error_pct": -3.098344328502356,
+        "scale_error_pct_plain": -3.1054785802562934,
+        "up_error_deg": 1.8477268338373172,
+        "residual_m": {
+          "median": 0.011262251670497263,
+          "p90": 0.020034883630441456,
+          "median_fit_set": 0.00955954379497726
+        },
+        "note": "trimmed Umeyama (70%, 8 rounds) of our aligned camera centres onto the dataset centres; scale_error_pct = 100 (1/s_fit - 1), + means our model is larger than the dataset's metric frame"
+      }
+    },
+    "smoke": {
+      "source_run": "smoke",
+      "git": "a57c8c1-dirty",
+      "frozen": "2026-10-30T12:11:40+05:30",
+      "command": "./ns run --frames test/data/honka60/frames --name smoke --quick --kind public --license \"CC BY 4.0\" --attribution \"MuSHRoom dataset (Ren et al. 2024), room honka\"",
+      "note": "30 Oct 11:42-12:05 IST, the test/README.md command on test/data/honka60 (frames 160-219). Wall 1,418 s (23.6 min) because the export waited 502 s for GPU memory (the rh-b7 SfM's LightGlue matcher held 33.5 GB); stage time without that wait about 13 min. An earlier run of the same 60 frames from tyrone (rh-smoke2, 11:27) gave r1 PSNR 20.21 and walkable 5.99 m2. Exit 30 expected: export F2 (the opacity step costs 0.4 dB on a 7k model), viewer R6/R9/R10 (viewer-side) and H6 under load. Room extent is not measured on this partial view (no wall columns).",
+      "quick": true,
+      "timings_s": {
+        "ingest": 1.77,
+        "sfm": 128.92,
+        "align": 2.62,
+        "train": 615.24,
+        "export": 510.18,
+        "grid": 1.22,
+        "total": 1259.95
+      },
+      "values": [
+        {
+          "id": "frames.n_kept",
+          "path": "frames.n_kept",
+          "measured": 60,
+          "range": [
+            60.0,
+            60.0
+          ],
+          "tolerance": "abs 0",
+          "why": "same input, deterministic ingest"
+        },
+        {
+          "id": "sfm.reg_frac",
+          "path": "sfm.variants[chosen].reg_frac",
+          "measured": 1.0,
+          "range": [
+            0.96,
+            1.04
+          ],
+          "tolerance": "abs 0.04",
+          "why": "mapper order and GPU matching vary"
+        },
+        {
+          "id": "sfm.reproj_px",
+          "path": "sfm.variants[chosen].reproj_px",
+          "measured": 0.4624,
+          "range": [
+            0.3124,
+            0.6124
+          ],
+          "tolerance": "abs 0.15"
+        },
+        {
+          "id": "sfm.n_pts",
+          "path": "sfm.variants[chosen].n_pts",
+          "measured": 5312,
+          "range": [
+            3984.0,
+            6640.0
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "align.up_resid_deg",
+          "path": "align.up_resid_deg",
+          "measured": 3.3430520397011674,
+          "range": [
+            null,
+            5.3431
+          ],
+          "tolerance": "cap 5.0",
+          "why": "varies run to run (0.0 and 3.3 deg on the same 60 frames); upper bound max(value + 2, 5)"
+        },
+        {
+          "id": "align.h_cap_m",
+          "path": "align.h_cap_m",
+          "measured": 1.4,
+          "range": [
+            1.25,
+            1.55
+          ],
+          "tolerance": "abs 0.15",
+          "why": "1.40 m by construction with the camera-height cue alone"
+        },
+        {
+          "id": "align.scale.pct_68",
+          "path": "align.scale.pct_68",
+          "measured": 12.749685157937574,
+          "range": [
+            11.7497,
+            13.7497
+          ],
+          "tolerance": "abs 1.0"
+        },
+        {
+          "id": "train.psnr",
+          "path": "train.variants[chosen].psnr",
+          "measured": 19.97450828552246,
+          "range": [
+            19.3745,
+            20.5745
+          ],
+          "tolerance": "abs 0.6",
+          "why": "gsplat runs vary (plan: quote +-0.2 dB); SfM varies too"
+        },
+        {
+          "id": "train.ssim",
+          "path": "train.variants[chosen].ssim",
+          "measured": 0.7758154273033142,
+          "range": [
+            0.7458,
+            0.8058
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.lpips",
+          "path": "train.variants[chosen].lpips",
+          "measured": 0.3745930790901184,
+          "range": [
+            0.3446,
+            0.4046
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.cc_psnr",
+          "path": "train.variants[chosen].cc_psnr",
+          "measured": 21.995365142822266,
+          "range": [
+            21.3954,
+            22.5954
+          ],
+          "tolerance": "abs 0.6"
+        },
+        {
+          "id": "train.n_gs",
+          "path": "train.variants[chosen].n_gs",
+          "measured": 120384,
+          "range": [
+            108345.6,
+            132422.4
+          ],
+          "tolerance": "rel 0.1",
+          "why": "MCMC fills its cap (1.5 M) on a full run"
+        },
+        {
+          "id": "export.sd.count",
+          "path": "export.sd.count",
+          "measured": 64571,
+          "range": [
+            58113.9,
+            71028.1
+          ],
+          "tolerance": "rel 0.1"
+        },
+        {
+          "id": "export.sd.mb",
+          "path": "export.sd.mb",
+          "measured": 1.207,
+          "range": [
+            0.9656,
+            1.4484
+          ],
+          "tolerance": "rel 0.2"
+        },
+        {
+          "id": "export.sd.psnr",
+          "path": "export.sd.psnr",
+          "measured": 19.4953744584016,
+          "range": [
+            18.7954,
+            20.1954
+          ],
+          "tolerance": "abs 0.7"
+        },
+        {
+          "id": "grid.walkable_m2",
+          "path": "grid.walkable_m2",
+          "measured": 6.812,
+          "range": [
+            5.109,
+            8.515
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "grid.path_coverage",
+          "path": "grid.path_coverage",
+          "measured": 1.0,
+          "range": [
+            0.95,
+            null
+          ],
+          "tolerance": "lo 0.05"
+        },
+        {
+          "id": "walls.penetrations",
+          "path": "walls.penetrations",
+          "measured": 0,
+          "range": [
+            0.0,
+            0.0
+          ],
+          "tolerance": "abs 0",
+          "why": "must stay 0"
+        },
+        {
+          "id": "viewer.fps_mean",
+          "path": "viewer.devices[*].fps_mean",
+          "measured": 59.9,
+          "range": [
+            54.9,
+            null
+          ],
+          "tolerance": "lo 5.0",
+          "why": "M1 headless Chrome, vsync-capped at 60"
+        },
+        {
+          "id": "viewer.first_frame_s",
+          "path": "viewer.devices[*].first_frame_s",
+          "measured": 0.379,
+          "range": [
+            null,
+            1.137
+          ],
+          "tolerance": "hi 2.0",
+          "why": "localhost"
+        },
+        {
+          "id": "timings.total",
+          "path": "timings.total",
+          "measured": 1259.95,
+          "range": [
+            null,
+            2204.9125
+          ],
+          "tolerance": "hi 0.75",
+          "why": "shared GPU: queueing for a slot dominates the spread"
+        }
+      ]
+    },
+    "phone": {
+      "source_run": "rh-phone",
+      "git": "a57c8c1-dirty",
+      "frozen": "2026-10-30T13:01:51+05:30",
+      "command": "./ns run tyrone:/home/sher/namma-space/inbox/honka_phone_hlg.mov --name rh-phone --quick --kind fixture --license \"CC BY 4.0\" --attribution \"Built from MuSHRoom honka frames (Ren et al. 2024), CC BY 4.0\" --title \"Phone-like test clip (honka, HEVC 10-bit HLG, portrait)\"",
+      "note": "30 Oct 12:10-13:01 IST. Clip built by python -m pipeline.ingest.make_phone_fixture from the 335 honka photos (HEVC Main10, HLG, rotate 90, 30 fps, 0.5 s per photo). SfM ran variant C (exhaustive) because the best of A/B/D was 87.8%; exit 11 remote, 30 after the viewer checks (H4/H4b on a 7k model, H6 under load, R9/R10).",
+      "quick": true,
+      "timings_s": {
+        "ingest": 29.58,
+        "sfm": 2370.44,
+        "align": 3.87,
+        "train": 420.6,
+        "export": 31.35,
+        "grid": 1.47,
+        "total": 2857.31
+      },
+      "values": [
+        {
+          "id": "frames.n_kept",
+          "path": "frames.n_kept",
+          "measured": 303,
+          "range": [
+            303.0,
+            303.0
+          ],
+          "tolerance": "abs 0",
+          "why": "same input, deterministic ingest"
+        },
+        {
+          "id": "sfm.reg_frac",
+          "path": "sfm.variants[chosen].reg_frac",
+          "measured": 0.8878,
+          "range": [
+            0.8478,
+            0.9278
+          ],
+          "tolerance": "abs 0.04",
+          "why": "mapper order and GPU matching vary"
+        },
+        {
+          "id": "sfm.reproj_px",
+          "path": "sfm.variants[chosen].reproj_px",
+          "measured": 0.7769,
+          "range": [
+            0.6269,
+            0.9269
+          ],
+          "tolerance": "abs 0.15"
+        },
+        {
+          "id": "sfm.n_pts",
+          "path": "sfm.variants[chosen].n_pts",
+          "measured": 14413,
+          "range": [
+            10809.75,
+            18016.25
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "align.up_resid_deg",
+          "path": "align.up_resid_deg",
+          "measured": 2.7815971104814468,
+          "range": [
+            null,
+            5.0
+          ],
+          "tolerance": "cap 5.0",
+          "why": "varies run to run (0.0 and 3.3 deg on the same 60 frames); upper bound max(value + 2, 5)"
+        },
+        {
+          "id": "align.h_cap_m",
+          "path": "align.h_cap_m",
+          "measured": 1.4,
+          "range": [
+            1.25,
+            1.55
+          ],
+          "tolerance": "abs 0.15",
+          "why": "1.40 m by construction with the camera-height cue alone"
+        },
+        {
+          "id": "align.scale.pct_68",
+          "path": "align.scale.pct_68",
+          "measured": 12.749685157937574,
+          "range": [
+            11.7497,
+            13.7497
+          ],
+          "tolerance": "abs 1.0"
+        },
+        {
+          "id": "train.psnr",
+          "path": "train.variants[chosen].psnr",
+          "measured": 20.209306716918945,
+          "range": [
+            19.6093,
+            20.8093
+          ],
+          "tolerance": "abs 0.6",
+          "why": "gsplat runs vary (plan: quote +-0.2 dB); SfM varies too"
+        },
+        {
+          "id": "train.ssim",
+          "path": "train.variants[chosen].ssim",
+          "measured": 0.7937243580818176,
+          "range": [
+            0.7637,
+            0.8237
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.lpips",
+          "path": "train.variants[chosen].lpips",
+          "measured": 0.38153076171875,
+          "range": [
+            0.3515,
+            0.4115
+          ],
+          "tolerance": "abs 0.03"
+        },
+        {
+          "id": "train.cc_psnr",
+          "path": "train.variants[chosen].cc_psnr",
+          "measured": 22.853317260742188,
+          "range": [
+            22.2533,
+            23.4533
+          ],
+          "tolerance": "abs 0.6"
+        },
+        {
+          "id": "train.n_gs",
+          "path": "train.variants[chosen].n_gs",
+          "measured": 327038,
+          "range": [
+            294334.2,
+            359741.8
+          ],
+          "tolerance": "rel 0.1",
+          "why": "MCMC fills its cap (1.5 M) on a full run"
+        },
+        {
+          "id": "export.sd.count",
+          "path": "export.sd.count",
+          "measured": 131543,
+          "range": [
+            118388.7,
+            144697.3
+          ],
+          "tolerance": "rel 0.1"
+        },
+        {
+          "id": "export.sd.mb",
+          "path": "export.sd.mb",
+          "measured": 2.41,
+          "range": [
+            1.928,
+            2.892
+          ],
+          "tolerance": "rel 0.2"
+        },
+        {
+          "id": "export.sd.psnr",
+          "path": "export.sd.psnr",
+          "measured": 19.87045392952473,
+          "range": [
+            19.1705,
+            20.5705
+          ],
+          "tolerance": "abs 0.7"
+        },
+        {
+          "id": "grid.walkable_m2",
+          "path": "grid.walkable_m2",
+          "measured": 17.465,
+          "range": [
+            13.0987,
+            21.8313
+          ],
+          "tolerance": "rel 0.25"
+        },
+        {
+          "id": "grid.path_coverage",
+          "path": "grid.path_coverage",
+          "measured": 1.0,
+          "range": [
+            0.95,
+            null
+          ],
+          "tolerance": "lo 0.05"
+        },
+        {
+          "id": "walls.penetrations",
+          "path": "walls.penetrations",
+          "measured": 0,
+          "range": [
+            0.0,
+            0.0
+          ],
+          "tolerance": "abs 0",
+          "why": "must stay 0"
+        },
+        {
+          "id": "viewer.fps_mean",
+          "path": "viewer.devices[*].fps_mean",
+          "measured": 59.9,
+          "range": [
+            54.9,
+            null
+          ],
+          "tolerance": "lo 5.0",
+          "why": "M1 headless Chrome, vsync-capped at 60"
+        },
+        {
+          "id": "viewer.first_frame_s",
+          "path": "viewer.devices[*].first_frame_s",
+          "measured": 0.402,
+          "range": [
+            null,
+            1.206
+          ],
+          "tolerance": "hi 2.0",
+          "why": "localhost"
+        },
+        {
+          "id": "timings.total",
+          "path": "timings.total",
+          "measured": 2857.31,
+          "range": [
+            null,
+            5000.2925
+          ],
+          "tolerance": "hi 0.75",
+          "why": "shared GPU: queueing for a slot dominates the spread"
+        }
+      ]
+    }
+  }
+}

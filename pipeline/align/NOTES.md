@@ -79,3 +79,21 @@ python -m unittest discover -s test/unit/align -p 'test_*.py'
 # tyrone, one script: align on honka and Mip, the unit tests, then COLMAP model_analyzer before/after
 bash test/unit/align/run_tyrone.sh        # runs through bin/nsdocker (namma-space-gpu:0.1, namma-colmap:0.1)
 ```
+
+## Integrator changes (30 Oct, morning)
+
+- **Up gate.** The 5 deg disagreement rule now compares the geometric cues only (planes vs walls). The camera cue is
+  gated when it is more than 10 deg from the fused up; between 5 and 10 deg it leaves a non-gating `note:` flag. Reason:
+  on the full honka run (`rh-honka`) the old rule fired (spread 6.2 deg: cameras 4.16 deg, planes 2.08 deg from the
+  fused up) while the fused up was 2.0 deg from MuSHRoom gravity. Test `test_camera_pitch_bias_does_not_gate`
+  (7 deg camera bias: up error 1.68 deg, no gate; the old rule would have fired at 6.3 deg).
+- **`metric_check.py`**: scale and up error of an aligned run against a dataset's metric poses (MuSHRoom
+  `transformations.json`), trimmed Umeyama matched by original file name. rh-honka: scale +3.3%, up 2.0 deg.
+- **Plane cue selection** (10:19). The plane cue now uses only the horizontal planes within 5 deg of the current up,
+  re-selected as the up improves (start from the camera cue; 5 rounds; again after the walls). Per-plane errors
+  against MuSHRoom gravity showed most RANSAC "horizontal" planes were slanted slices through furniture
+  (vr_room: 6 of 8 planes 7-17 deg off; honka: 6 of 8 planes 7-20 deg off), so the old plane cue was 7.2 deg (vr_room)
+  and 3.9 deg (honka) off and the fused up 4.2 and 2.0 deg off. Re-running the new estimate on the two real aligned
+  models: fused up 0.30 deg (vr_room, 1 plane used, walls 0.48 deg) and 1.36 deg (honka, 2 planes used); no gate
+  flag on either. Synthetic D1 0.08-0.20 deg; honka smoke D2 1.34 deg (was 1.63). Weighting is now by support only
+  (support / rms^2 favoured small tight slices).

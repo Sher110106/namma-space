@@ -63,3 +63,15 @@ choice rules, stats parsing, a full stage run against a fake trainer, second-slo
 - Quick R0 + R1 together on the aligned copy (inside my own running container, `docker exec`, 7k steps):
   `python -B -m pipeline.train --run /w/runs/w3-honka-quick --data-dir /w/runs/w3-honka/40_align --quick --parallel force`.
 - Ablation: same with `--variants r0 --parallel no --no-scene-unit` into `/w/runs/w3-honka-abl`.
+
+## Integrator fix (30 Oct, 09:15): the wall-limit loop
+`ns-w3-trainB` (`runs/w3-honka-norm`) printed "wall limit 3600 s reached; terminating ['r0']" every 2 s from 04:55
+to 09:12 with the GPU idle: the trainer's log had stopped at step 19,746 at 04:24 and the process never exited after
+SIGTERM, so `run_jobs` never left its loop. Now:
+- `--max-minutes` is per variant, from that variant's start (default 90 full, 30 quick);
+- `--stall-minutes` (default 15): no new trainer output for that long counts as hung;
+- SIGTERM to the process group, SIGKILL 30 s later, and 60 s after that the job is abandoned so the stage finishes;
+- the record says `status: timeout | stalled`, `end_reason`, `abandoned`, and `partial_step` when it has a 7k
+  evaluation; such a partial model is shipped as the last rung of the ladder (exit 30). r0nb runs only after crashes
+  or NaN, not after a timeout.
+Tests: `test_wall_limit_kills_a_trainer_that_ignores_sigterm`, `test_stall_watchdog_stops_a_silent_trainer`.

@@ -22,12 +22,15 @@ Options
     --dry-run         print the plan and exit without running stages
     --status          print status.json and exit
     --allow-missing   a missing stage module is a warning, not exit 20
+    --with-optional   also run optional P1 stages (geometry); by default they are skipped
     --no-docker       run stage modules directly with this python (tests, Mac)
     --stub-dir DIR    run DIR/<stage>.py instead of pipeline.<stage> (test stubs; relative to the repo)
     --fake-free-gb N  pretend only N GB of disk is free (test 0.3); stages then exit 20
     --min-free-gb N   disk floor in GB (default 15; tests on a full Mac lower it)
     --git SHA         recorded in run.json (the repo on tyrone has no .git)
     --runs-root DIR, --repo DIR, --ns-root DIR, --nsdocker PATH
+    --stage-timeout STAGE=MIN  wall limit once the stage's container runs (STAGE_LIMIT_MIN); past it the
+                      stage is stopped and recorded as exit 20. --queue-limit-min caps the wait for a slot.
 
 Exit codes (CONTRACTS 2.11): 0 good, 10 capture problem, 11 partial reconstruction shipped,
 20 infrastructure problem, 30 a quality gate failed (bundle exists, needs review).
@@ -67,6 +70,13 @@ NSDOCKER_DEFAULT = os.environ.get("NSDOCKER", f"{NS_ROOT_DEFAULT}/bin/nsdocker")
 RUN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,40}$")
 RESCALE = st.StageInfo("rescale", "pipeline.align.rescale", (), "", st.GPU_IMAGE, False)
 EXIT_PRIORITY = {0: 0, 11: 1, 30: 2, 10: 3, 20: 4}
+# Wall limit per stage in minutes, counted from the moment its container runs (queueing for a GPU slot is
+# not counted; that has its own limit). A stage past its limit is stopped and recorded as exit 20, so a
+# hung tool can never hold the run (or the GPU) for hours. Override: --stage-timeout STAGE=MIN.
+STAGE_LIMIT_MIN = {"ingest": 45, "sfm": 150, "align": 30, "train": 240, "geometry": 60, "export": 60,
+                   "grid": 20, "rescale": 15}
+QUEUE_LIMIT_MIN = 240
+BEAT_S = float(os.environ.get("NS_RUNNER_BEAT_S", "10"))   # status heartbeat and limit check interval
 
 _stop = threading.Event()
 
@@ -95,6 +105,11 @@ class Runner:
         self.current_container = ""
         self.image_over = dict(x.split("=", 1) for x in args.image)
         self.scripts = dict(x.split("=", 1) for x in args.script)
+        self.stage_limits = dict(STAGE_LIMIT_MIN)
+        for x in args.stage_timeout:
+            k, v = x.split("=", 1)
+            self.stage_limits[k] = float(v)
+        self.timed_out = ""
 
     def image_for(self, info: st.StageInfo) -> str:
         return self.image_over.get(info.name, info.image)
@@ -294,6 +309,10 @@ class Runner:
             t0 = time.monotonic()
             last_beat = 0.0
             self.set_stage(label, child_pid=self.proc.pid, container=container if not self.a.no_docker else "")
+            limit_s = 60 * float(self.stage_limits.get(label, 120))
+            queue_s = 60 * float(self.a.queue_limit_min)
+            t_run = t0 if self.a.no_docker else None   # when the container was first seen running
+            self.timed_out = ""
             while True:
                 try:
                     rc = self.proc.wait(timeout=0.25)
@@ -307,17 +326,48 @@ class Runner:
                     fh.write(f"=== {now()} interrupted\n")
                     self.proc = None
                     return -signal.SIGTERM
-                if time.monotonic() - last_beat > 10:
+                if time.monotonic() - last_beat > BEAT_S:
                     last_beat = time.monotonic()
+                    if t_run is None and self.container_running(container):
+                        t_run = time.monotonic()
+                        self.set_stage(label, container_started=now(), queued_s=round(t_run - t0, 1))
                     self.set_stage(label, elapsed_s=round(time.monotonic() - t0, 1), last_line=self.tail(log_path))
+                    over = ""
+                    if t_run is not None and time.monotonic() - t_run > limit_s:
+                        over = f"ran {limit_s / 60:.0f} min (stage limit); stopped"
+                    elif t_run is None and time.monotonic() - t0 > queue_s:
+                        over = f"waited {queue_s / 60:.0f} min for a container or GPU slot; gave up"
+                    if over:
+                        say(f"{label}: {over}")
+                        fh.write(f"=== {now()} {label}: {over}\n")
+                        fh.flush()
+                        self.timed_out = over
+                        self.kill_current()
+                        try:
+                            rc = self.proc.wait(timeout=60)
+                        except subprocess.TimeoutExpired:
+                            rc = -signal.SIGKILL
+                        break
             fh.write(f"=== {now()} end {label}: exit {rc} after {time.monotonic() - t0:.1f}s\n")
         self.proc = None
         self.current_container = ""
         return rc
 
+    def container_running(self, name: str) -> bool:
+        try:
+            r = self.docker("ps", "--filter", f"name=^{name}$", "--format", "{{.Names}}", timeout=20)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return name in r.stdout.split()
+
     def kill_current(self) -> None:
         if self.current_container:
             self.stop_container(self.current_container)
+            try:   # docker stop gives up after its timeout on a process stuck in the driver; kill it
+                if self.container_running(self.current_container):
+                    self.docker("kill", self.current_container, timeout=30)
+            except (OSError, subprocess.SubprocessError):
+                pass
         if self.proc and self.proc.poll() is None:
             try:
                 os.killpg(self.proc.pid, signal.SIGTERM)
@@ -378,6 +428,13 @@ class Runner:
             say(f"{name}: done already ({info.json}), skipping")
             self.set_stage(name, state="skipped-done")
             return True
+        wanted = self.a.with_optional or (self.a.only and name in [x.strip() for x in self.a.only.split(",")])
+        if info.optional and not wanted:
+            # P1 stages (geometry) feed nothing later in the chain; they cost a GPU slot and minutes, so they run only
+            # when asked: --with-optional (ns run --geometry) or --only <stage>
+            say(f"{name}: optional, not requested; skipped")
+            self.set_stage(name, state="skipped-optional")
+            return True
         if not self.module_exists(info):
             msg = f"{name}: module {info.module} not found ({self.module_path(info)}); skipped"
             say("SKIP " + msg)
@@ -412,12 +469,20 @@ class Runner:
         marker = (self.dir / info.json).exists()
         note = ""
         res = self.ns_result(self.dir / "logs" / f"{name}.log")
+        if code == 0 and marker:   # a stage that shipped a partial result (sfm: under 95% in one model) -> 11
+            sj = st.read_json(self.dir / info.json, {}) or {}
+            if isinstance(sj, dict) and sj.get("partial") is True:
+                code = 11
+                note = "partial: " + str(sj.get("why") or "the stage flagged its result as partial")[:200]
+                self.warnings.append(f"{name}: {note}")
         if code == 0 and res.get("gate_failed"):  # the stage finished but says its quality gate failed
             code = 30
             flags = res.get("flags") or []
             note = "quality gate failed" + (f": {'; '.join(str(f) for f in flags)[:200]}" if flags else "")
             self.warnings.append(f"{name}: {note}")
-        if rc not in EXIT_PRIORITY:
+        if self.timed_out:
+            code, note = 20, self.timed_out
+        elif rc not in EXIT_PRIORITY:
             note = f"stage exited {rc} (not a contract code); treated as 20"
         elif rc in (0, 11, 30) and not marker:
             code, note = 20, f"exit {rc} but {info.json} was not written"
@@ -428,6 +493,15 @@ class Runner:
             os.replace(self.dir / info.json, failed)
             self.warnings.append(f"{name}: exit {code}; its {Path(info.json).name} was renamed to {failed.name}")
         self.unstash(stashed)
+        if info.optional and code != 0:
+            # an optional stage (geometry, P1) never decides the run: record it, warn, go on
+            msg = f"{name} (optional) exit {code}" + (f": {note}" if note else "") + "; ignored, the run continues"
+            say(msg)
+            self.warnings.append(msg)
+            self.set_stage(name, state=f"exit-{code}-ignored", exit=code, seconds=round(secs, 1), ended=now(),
+                           note=(note + "; " if note else "") + "optional stage, ignored",
+                           last_line=self.tail(self.dir / "logs" / f"{name}.log", 2))
+            return True
         self.set_stage(name, state="done" if code == 0 else f"exit-{code}", exit=code, seconds=round(secs, 1),
                        ended=now(), note=note, last_line=self.tail(self.dir / "logs" / f"{name}.log", 2))
         say(f"{name}: exit {code} in {secs:.1f}s" + (f" ({note})" if note else ""))
@@ -486,6 +560,7 @@ class Runner:
             stages = [st.STAGE_BY_NAME["grid"]]
             a.from_stage = "grid"
         flags = {"from": a.from_stage, "to": a.to, "only": a.only, "quick": a.quick, "opt": a.opt,
+                 "with_optional": a.with_optional,
                  "rescale": a.rescale, "no_docker": a.no_docker, "stub_dir": a.stub_dir,
                  "fake_free_gb": a.fake_free_gb, "allow_missing": a.allow_missing}
         plan = []
@@ -546,6 +621,7 @@ def parse_args(argv: list) -> argparse.Namespace:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--allow-missing", action="store_true")
+    ap.add_argument("--with-optional", action="store_true", help="also run optional P1 stages (geometry)")
     ap.add_argument("--no-docker", action="store_true")
     ap.add_argument("--stub-dir")
     ap.add_argument("--fake-free-gb", type=float)
@@ -556,6 +632,11 @@ def parse_args(argv: list) -> argparse.Namespace:
     ap.add_argument("--runs-root", default=None)
     ap.add_argument("--repo", default=str(REPO_DEFAULT))
     ap.add_argument("--nsdocker", default=NSDOCKER_DEFAULT)
+    ap.add_argument("--stage-timeout", action="append", default=[],
+                    help="STAGE=MINUTES wall limit once the stage's container runs (defaults: "
+                         + ", ".join(f"{k} {v}" for k, v in STAGE_LIMIT_MIN.items()) + ")")
+    ap.add_argument("--queue-limit-min", type=float, default=QUEUE_LIMIT_MIN,
+                    help="give up on a stage that waits this long for a container or GPU slot")
     a = ap.parse_args(argv)
     if not RUN_NAME_RE.match(a.run):
         ap.error(f"run name {a.run!r} must match {RUN_NAME_RE.pattern}")
@@ -563,7 +644,7 @@ def parse_args(argv: list) -> argparse.Namespace:
     for o in a.opt:
         if ":" not in o:
             ap.error(f"--opt needs STAGE:ARG, got {o!r}")
-    for o in a.image + a.script:
+    for o in a.image + a.script + a.stage_timeout:
         if "=" not in o:
             ap.error(f"--image and --script need STAGE=VALUE, got {o!r}")
     return a

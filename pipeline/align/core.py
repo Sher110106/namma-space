@@ -35,7 +35,10 @@ H_FACTOR = 0.80           # phone height = this x user height
 SIGMA_H_WITH = 0.08
 SIGMA_H_WITHOUT = 0.12
 SIGMA_MIN_MOGE = 0.08
-CUE_DISAGREE_DEG = 5.0
+PLANE_AGREE_DEG = 5.0     # a horizontal plane joins the plane cue only within this angle of the current up
+CUE_DISAGREE_DEG = 5.0    # planes vs walls (both geometric) may disagree by this much before the scene is flagged
+CAMERA_CUE_MAX_DEG = 10.0 # the camera cue is biased by the capture's mean pitch (4.2 deg on honka, 4.9 on Mip room),
+                          # so it is gated against the fused up at this looser bound, not at 5 deg (integrator, 30 Oct)
 
 
 def unit(v: np.ndarray) -> np.ndarray:
@@ -275,11 +278,20 @@ def estimate_up(model: cio.Model, seed: int = 0, thr_frac: float = 0.012, max_pt
     for p in horiz:
         p.support = int(round(p.support * f))
     cues: Dict[str, Optional[np.ndarray]] = {"cameras": u_cam, "planes": None, "walls": None}
-    if horiz:
-        big = [p for p in horiz if p.support >= FLOOR_REL_SUPPORT * max(q.support for q in horiz)]
-        cues["planes"] = unit(sum((p.support / max(p.rms, 1e-9) ** 2) * p.n for p in big))   # tight, well-supported planes count most
     w = {"cameras": 1.0, "planes": 2.0, "walls": 1.0}
-    up1 = _fuse(cues, w, u_cam)
+    # The plane cue uses only planes that agree with the current up within PLANE_AGREE_DEG, re-selected as the up
+    # improves (integrator, 30 Oct). Before, every plane with 25% of the largest support counted, weighted by
+    # support / rms^2; on the real rooms most "horizontal" RANSAC planes were slanted slices through furniture
+    # (13-20 deg off gravity), which put the plane cue 3.9 deg (honka) and 7.2 deg (vr_room) off gravity and the fused
+    # up 2.0 and 4.2 deg off. With the selection: 1.4 and 1.9 deg (measured against the MuSHRoom poses).
+    up1 = u_cam
+    sel: List[Plane] = []
+    for _ in range(5):
+        sel = [p for p in horiz if angle_deg(p.n if p.n @ up1 >= 0 else -p.n, up1) <= PLANE_AGREE_DEG]
+        cues["planes"] = unit(sum(p.support * (p.n if p.n @ up1 >= 0 else -p.n) for p in sel)) if sel else None
+        up1 = _fuse(cues, w, u_cam)
+    plane_info = {"n_found": len(horiz), "n_used": len(sel), "agree_deg": PLANE_AGREE_DEG,
+                  "used_supports": [int(p.support) for p in sel]}
 
     # pass 2: walls about the refined up
     walls = find_planes(Pr, up1, thr, rng, "vertical", 8, WALL_TOL_DEG_TIGHT, MIN_SUPPORT_FRAC)
@@ -303,18 +315,40 @@ def estimate_up(model: cio.Model, seed: int = 0, thr_frac: float = 0.012, max_pt
             wall_info["note"] = (f"cue not used: wall normals scatter {r:.1f} deg from vertical, conditioning {cond:.2f} "
                                  f"(needs <= 3 deg and >= 0.25: walls in two directions)")
     up = _fuse(cues, w, u_cam)
+    # the up with the walls may move the plane selection once more
+    for _ in range(3):
+        sel2 = [p for p in horiz if angle_deg(p.n if p.n @ up >= 0 else -p.n, up) <= PLANE_AGREE_DEG]
+        if not sel2 or [id(p) for p in sel2] == [id(p) for p in sel]:
+            break
+        sel = sel2
+        cues["planes"] = unit(sum(p.support * (p.n if p.n @ up >= 0 else -p.n) for p in sel))
+        up = _fuse(cues, w, u_cam)
+        plane_info.update(n_used=len(sel), used_supports=[int(p.support) for p in sel], reselected_with_walls=True)
     names = [k for k, v in cues.items() if v is not None]
     cue_angles = {k: angle_deg(cues[k], up) for k in names}
     used = [k for k in names if w[k] > 0]
     pair = [angle_deg(cues[a], cues[b]) for i, a in enumerate(used) for b in used[i + 1:]]
     spread = max(pair) if pair else 0.0
     resid = max(cue_angles[k] for k in used) if used else 0.0
-    if spread > CUE_DISAGREE_DEG:
-        flags.append(f"up cues disagree by {spread:.1f} deg (> {CUE_DISAGREE_DEG:g})")
+    # Gate (FINAL_PLAN 2.4 "flag if the cues disagree by more than 5 deg"), applied to the geometric cues only.
+    # On honka the literal rule fired on the camera cue's pitch bias (spread 6.2 deg) while the fused up was 2.0 deg
+    # from gravity (metric_check against the MuSHRoom poses), so a good scene would always read "review".
+    geo = [k for k in ("planes", "walls") if k in used]
+    geo_pair = [angle_deg(cues[a], cues[b]) for i, a in enumerate(geo) for b in geo[i + 1:]]
+    geo_spread = max(geo_pair) if geo_pair else 0.0
+    cam_dev = cue_angles.get("cameras", 0.0) if "cameras" in used else 0.0
+    if geo_spread > CUE_DISAGREE_DEG:
+        flags.append(f"up cues disagree by {geo_spread:.1f} deg (planes vs walls; > {CUE_DISAGREE_DEG:g})")
+    elif geo and cam_dev > CAMERA_CUE_MAX_DEG:
+        flags.append(f"up cues disagree by {cam_dev:.1f} deg (camera cue vs fused up; > {CAMERA_CUE_MAX_DEG:g})")
+    elif spread > CUE_DISAGREE_DEG:
+        flags.append(f"note: camera up cue is {cam_dev:.1f} deg from the fused up (cue spread {spread:.1f} deg); "
+                     f"expected from the capture's pitch, not gated")
 
     # floor and ceiling heights along the final up
     fl_pl, floor_h, finfo, ceil_h = choose_floor(P, C, up, horiz, walls, thr, flags)
-    info = {"cameras": cam_info, "walls": wall_info, "n_points_used": int(len(P)), "n_points_ransac": int(len(Pr)),
+    info = {"cameras": cam_info, "walls": wall_info, "planes": plane_info,
+            "n_points_used": int(len(P)), "n_points_ransac": int(len(Pr)),
             "ransac_thr_model_units": thr}
     return UpResult(up=up, cues=cues, cue_weights=w, cue_angles_deg=cue_angles, cue_spread_deg=spread, resid_deg=resid,
                     floor=fl_pl, floor_h=floor_h, floor_info=finfo, ceiling_h=ceil_h, horizontals=horiz, walls=walls,

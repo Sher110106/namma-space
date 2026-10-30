@@ -77,6 +77,72 @@ def compose_T_final(run_dir: str, T_prev: Optional[List[List[float]]] = None) ->
     return [[sum(S[i][k] * P[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
 
 
+def _matmul4(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+    return [[sum(A[i][k] * B[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+
+def apply_to_export(run_dir: str) -> Optional[Dict[str, Any]]:
+    """Write the user scale into 60_export so every consumer sees it (integrator, 30 Oct).
+
+    The grid stage and the viewer's bundle.py both read `T_final` from 60_export/export.json (its `matrix` first), and
+    bundle.py copies the held-out poses from heldout/heldout.json as they are. So: keep the export stage's own T_final as
+    `T_final_export` (written once), set `T_final = T_user @ T_final_export` (matrix, scale, translation), and scale
+    the held-out and parity camera positions by f about the world origin (their rotations and FOV do not change, and
+    the parity images stay valid because scene and camera scale together). Idempotent: always composed from the export
+    stage's originals. Returns a summary, or None when the export stage has not run."""
+    ep = os.path.join(run_dir, "60_export", "export.json")
+    ej = _jload(ep)
+    if ej is None:
+        return None
+    f = factor(run_dir)
+    base = ej.get("T_final_export") or ej.get("T_final") or {"scale": 1.0, "quaternion": [0, 0, 0, 1],
+                                                              "translation": [0, 0, 0]}
+    ej["T_final_export"] = base
+    if "matrix" in base and len(base["matrix"]) == 16:
+        m = base["matrix"]
+        M = [m[0:4], m[4:8], m[8:12], m[12:16]]
+    else:   # build it from scale, quaternion [x, y, z, w], translation
+        x, y, z, w = (float(v) for v in base.get("quaternion", [0, 0, 0, 1]))
+        n = math.sqrt(x * x + y * y + z * z + w * w) or 1.0
+        x, y, z, w = x / n, y / n, z / n, w / n
+        R = [[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+             [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+             [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]]
+        sc = float(base.get("scale", 1.0))
+        tr = [float(v) for v in base.get("translation", base.get("position", [0, 0, 0]))]
+        M = [[sc * R[i][j] for j in range(3)] + [tr[i]] for i in range(3)] + [[0.0, 0.0, 0.0, 1.0]]
+    Mn = _matmul4(T_user(f), [[float(v) for v in row] for row in M])
+    new = {k: v for k, v in base.items() if k not in ("matrix", "scale", "translation", "position")}
+    new.update({"scale": float(base.get("scale", 1.0)) * f, "quaternion": base.get("quaternion", [0, 0, 0, 1]),
+                "translation": [Mn[0][3], Mn[1][3], Mn[2][3]], "matrix": [v for row in Mn for v in row],
+                "user_scale": f})
+    ej["T_final"] = new
+    ej["user_scale"] = f
+    _jdump(ep, ej)
+    moved = {}
+    for sub, fname in (("heldout", "heldout.json"), ("parity", "parity.json")):
+        cur = os.path.join(run_dir, "60_export", sub, fname)
+        orig = os.path.join(run_dir, "60_export", sub, fname.replace(".json", "_export.json"))
+        if not os.path.exists(orig):
+            if not os.path.exists(cur):
+                continue
+            with open(cur) as fh:
+                txt = fh.read()
+            with open(orig, "w") as fh:
+                fh.write(txt)
+        with open(orig) as fh:
+            rows = json.load(fh)
+        for r in rows if isinstance(rows, list) else []:
+            if isinstance(r, dict) and isinstance(r.get("position"), list):
+                r["position"] = [float(v) * f for v in r["position"]]
+        tmp = cur + f".tmp-{os.getpid()}"
+        with open(tmp, "w") as fh:
+            json.dump(rows, fh, indent=1)
+        os.replace(tmp, cur)
+        moved[sub] = len(rows) if isinstance(rows, list) else 0
+    return {"user_scale": f, "T_final_scale": new["scale"], "poses_scaled": moved}
+
+
 # ---------------------------------------------------------------------------------------------
 # tape measures against the model
 
@@ -225,6 +291,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 20
     print(f"user scale {r['applied'][-1]['from']:.4g} -> {r['factor_total']:.4g}; final scale {r['scale_final']:.4g} m per SfM unit "
           f"(automatic {r['auto']['scale']:.4g}); H_cap {r['h_cap_m_final']:.2f} m")
+    ex = apply_to_export(run)
+    if ex is None:
+        print("60_export/export.json not present yet: the export stage will start from the automatic scale; "
+              "run the rescale again after it")
+    else:
+        print(f"60_export/export.json T_final now includes the user scale (T_final scale {ex['T_final_scale']:.4g}); "
+              f"held-out/parity poses scaled: {ex['poses_scaled']}")
     print("rebuild the grid and the bundle to apply it (no retraining); T_final = T_user @ T_final(export)")
     print("NS_RESULT " + json.dumps({"exit": 0, "changed": True, "factor_total": r["factor_total"], "scale_final": r["scale_final"]}))
     return 0

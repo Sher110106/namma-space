@@ -67,6 +67,7 @@ def main(stage: str) -> int:
     ap.add_argument("--run", required=True)
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--factor", type=float, default=None)
+    ap.add_argument("--scale", type=float, default=None)   # what ns rescale --factor now passes (rescale.py's name)
     args, _ = ap.parse_known_args()
     run = Path(args.run)
     cfg = st.read_json(run / "stub_cfg.json", {}).get(stage, {})
@@ -74,7 +75,7 @@ def main(stage: str) -> int:
     if stage == "rescale":
         exp = run / "60_export" / "export.json"
         j = st.read_json(exp)
-        k = args.factor if args.factor else 2.0
+        k = args.factor or args.scale or 2.0
         j["T_final"] = [[k * IDENT[i][j2] if i < 3 and j2 < 3 else IDENT[i][j2] for j2 in range(4)] for i in range(4)]
         st.write_json_atomic(exp, j)
         call_log(run, stage, "end")
@@ -91,6 +92,7 @@ def main(stage: str) -> int:
             print('NS_RESULT {"exit": 0, "gate_failed": true, "flags": ["stub gate flag"]}', flush=True)
         data = payload(stage, run, args.quick)
         data["stub"] = True
+        data.update(cfg.get("json_extra", {}))
         name = Path(st.STAGE_BY_NAME[stage].json).name
         st.write_json_atomic(ctx.out / name, data)
         if stage == "sfm":

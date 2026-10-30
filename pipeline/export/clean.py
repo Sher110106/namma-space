@@ -116,6 +116,30 @@ def prune_to(s: Splats, n: int, mode: str = "area") -> Splats:
     return s.take(idx)
 
 
+def measure_floor_local(s: Splats, cam_centres: np.ndarray, band_m: float = 0.20, near_m: float = 1.5,
+                        up_axis: int = 1):
+    """Floor height as a local refinement of the align stage's floor (y = 0): the median height of opaque splats
+    (opacity > 0.5) within band_m of y = 0 and within near_m of a camera in plan view. The same measure the grid stage
+    reports as floor_offset_measured_m. Returns (floor_y or None, info).
+
+    Integrator, 30 Oct: the global "lowest peak" rule below found a peak 0.32 m (honka) and 0.12 m (vr_room) under the
+    floor that the align stage and the grid stage both put within 1-2 cm of y = 0; on vr_room it moved the whole scene
+    up by 0.12 m. The lowest peak is fed by splats under the floor (reflections, noise), so it is kept only as a record."""
+    a = sigmoid(s.opacity)
+    y = s.means[:, up_axis].astype(np.float64)
+    sel = (a > 0.5) & (np.abs(y) <= band_m)
+    if sel.sum() < 200 or len(cam_centres) == 0:
+        return None, {"reason": f"only {int(sel.sum())} opaque splats within {band_m} m of y = 0"}
+    from scipy.spatial import cKDTree
+    pl = [0, 1, 2]
+    pl.remove(up_axis)
+    d, _ = cKDTree(np.asarray(cam_centres, dtype=np.float64)[:, pl]).query(s.means[sel][:, pl].astype(np.float64))
+    near = d <= near_m
+    if near.sum() < 200:
+        return None, {"reason": f"only {int(near.sum())} of them within {near_m} m of the path"}
+    return float(np.median(y[sel][near])), {"n_splats": int(near.sum()), "band_m": band_m, "near_path_m": near_m}
+
+
 def measure_floor_y(s: Splats, cam_centres: np.ndarray, bin_m: float = 0.02,
                     min_support_frac: float = 0.25, up_axis: int = 1):
     """Floor height from opaque splat footprints (FINAL_PLAN 2.4 rule): the lowest horizontal-plane peak of the

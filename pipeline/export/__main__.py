@@ -58,6 +58,12 @@ def _json(path: str, obj) -> None:
 ANTIALIASED = True      # the pipeline trains with --antialiased; --classic-render for smoke PLYs trained without it
 OUTSIDE_CANDIDATES_M = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
 OUTSIDE_STEP_MAX_DB = 0.10
+# Step 3 ("huge": largest axis above both 1.0 m and the 99.9th percentile) cost 2.0 dB of held-out PSNR on MuSHRoom
+# vr_room (312 splats: the large splats that cover its plain walls and ceiling; 24.00 -> 21.99 dB), and 0.07 dB on
+# honka. Same rule as step 4: take the first axis limit whose step costs <= 0.10 dB, else skip the step (integrator,
+# 30 Oct).
+HUGE_CANDIDATES_M = (1.0, 2.0, 4.0, 8.0)
+HUGE_STEP_MAX_DB = 0.10
 
 
 def eval_psnr(s: ply_io.Splats, cams, label: str) -> Optional[dict]:
@@ -228,6 +234,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--n-heldout", type=int, default=8)
     ap.add_argument("--also-splat", action="store_true", help="also write the .splat fallback of every target")
     ap.add_argument("--no-spz", action="store_true", help="skip splat-transform; ship the .splat fallback")
+    ap.add_argument("--huge-axis", default="auto",
+                    help="step 3 axis limit in metres, or auto: the first of 1, 2, 4, 8 m costing <= 0.10 dB, else skip")
     ap.add_argument("--outside-grow", default="auto",
                     help="auto (smallest of 0.5..16 m whose step costs <= 0.10 dB) or a number of metres (plan: 0.5)")
     ap.add_argument("--classic-render", action="store_true", help="parity renders with classic rasterisation")
@@ -315,6 +323,36 @@ def main(argv: Optional[List[str]] = None) -> int:
     steps_psnr: Dict[str, Optional[float]] = {}
     params = CL.CleanParams()
     outside_search: List[dict] = []
+    huge_search: List[dict] = []
+    huge_m = params.huge_axis_m
+    NO_HUGE = dict(huge_axis_m=float("inf"), huge_percentile=100.0)   # re-cleaning a held subset must not re-run step 3
+    if cams_ho and a.huge_axis == "auto" and base_psnr is not None:
+        held_h: Dict[str, ply_io.Splats] = {}
+        CL.clean(s_raw, np.zeros((0, 3)), np.zeros((0, 3)), CL.CleanParams(box_grow_m=float("inf")),
+                 on_step=lambda n, c: held_h.setdefault(n, c) if n == "opacity" else None)
+        ref_h = eval_psnr(held_h["opacity"], cams_ho, "huge-search base")["psnr"]
+        huge_m = float("inf")
+        for hm in HUGE_CANDIDATES_M:
+            sub, rm, _ = CL.clean(held_h["opacity"], np.zeros((0, 3)), np.zeros((0, 3)),
+                                  CL.CleanParams(min_opacity=0.0, huge_axis_m=hm, box_grow_m=float("inf")))
+            if rm["huge"] == 0:
+                huge_m = hm
+                huge_search.append({"axis_m": hm, "removed": 0, "psnr": ref_h, "cost_db": 0.0})
+                break
+            r = eval_psnr(sub, cams_ho, f"huge axis {hm} m")
+            cost = ref_h - r["psnr"]
+            huge_search.append({"axis_m": hm, "removed": rm["huge"], "psnr": r["psnr"], "cost_db": cost})
+            if cost <= HUGE_STEP_MAX_DB:
+                huge_m = hm
+                break
+        del held_h
+        if not np.isfinite(huge_m):
+            warnings.append(f"huge-splat step skipped: every axis limit cost more than {HUGE_STEP_MAX_DB} dB ({huge_search})")
+        params = CL.CleanParams(huge_axis_m=huge_m, huge_percentile=(100.0 if not np.isfinite(huge_m) else 99.9))
+        log(f"huge step: axis limit {huge_m} m chosen from {huge_search}")
+    elif a.huge_axis != "auto":
+        huge_m = float(a.huge_axis)
+        params = CL.CleanParams(huge_axis_m=huge_m)
     if cams_ho and a.outside_grow == "auto" and base_psnr is not None:
         # Step 4 can delete background splats seen through windows and doors, which the sparse SfM box does not
         # cover. Take the smallest growth whose step costs <= 0.10 dB of held-out PSNR; otherwise skip the step.
@@ -323,7 +361,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         ref = eval_psnr(held["huge"], cams_ho, "outside-search base")["psnr"]
         chosen_grow = float("inf")
         for g in OUTSIDE_CANDIDATES_M:
-            p2 = CL.CleanParams(box_grow_m=g)
+            p2 = CL.CleanParams(box_grow_m=g, **NO_HUGE)
             sub, rm, _ = CL.clean(held["huge"], pts, np.zeros((0, 3)), p2)
             if rm["outside"] == 0:
                 chosen_grow = g
@@ -336,10 +374,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 chosen_grow = g
                 break
         del held
-        params = CL.CleanParams(box_grow_m=chosen_grow)
+        params = CL.CleanParams(box_grow_m=chosen_grow, huge_axis_m=params.huge_axis_m, huge_percentile=params.huge_percentile)
         log(f"outside-box step: grow {chosen_grow} m chosen from {outside_search}")
     elif a.outside_grow != "auto":
-        params = CL.CleanParams(box_grow_m=float(a.outside_grow))
+        params = CL.CleanParams(box_grow_m=float(a.outside_grow), huge_axis_m=params.huge_axis_m,
+                                huge_percentile=params.huge_percentile)
 
     def on_step(name: str, cur: ply_io.Splats) -> None:
         if cams_ho and not a.no_breakdown:
@@ -347,6 +386,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             steps_psnr[name] = r["psnr"] if r else None
     s_clean, removed, det = CL.clean(s_raw, pts, centres, params, on_step=on_step)
     det["outside_search"] = outside_search
+    det["huge_search"] = huge_search
     del s_raw
     log(f"clean: {det['n_in']} -> {det['n_out']}  removed {removed}")
     ply_io.write_ply(os.path.join(tmp, "clean.ply"), s_clean)
@@ -360,13 +400,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     tf = HO.identity_t_final()
     tf_info: dict = {"method": f"none (frame {a.frame})" if a.frame != "aligned" else None}
     if a.frame == "aligned":
-        fy, finfo = CL.measure_floor_y(s_clean, centres)
-        tf_info = {"method": "lowest footprint-weighted height peak >= 25% of the tallest, below cameras",
-                   "floor_y_measured": fy, **finfo}
+        fy, finfo = CL.measure_floor_local(s_clean, centres)
+        fy_peak, pinfo = CL.measure_floor_y(s_clean, centres)
+        tf_info = {"method": "median height of opaque splats within 0.20 m of the align floor and 1.5 m of the path",
+                   "floor_y_measured": fy, **finfo,
+                   "lowest_peak_rule": {"floor_y": fy_peak, **pinfo, "used": False}}
+        if fy_peak is not None and fy is not None and abs(fy_peak - fy) > 0.10:
+            warnings.append(f"lowest splat-height peak at y = {fy_peak:.3f} m disagrees with the floor near the "
+                            f"path ({fy:.3f} m); splats under the floor? (not used)")
         if fy is None:
             warnings.append(f"floor not measured: {finfo.get('reason')}")
-        elif abs(fy) > 0.30:
-            warnings.append(f"measured floor y = {fy:.3f} m is more than 0.30 m from 0; T_final left at identity")
+        elif abs(fy) > 0.15:
+            warnings.append(f"measured floor y = {fy:.3f} m is more than 0.15 m from 0; T_final left at identity")
             tf_info["applied"] = False
         else:
             tf["translation"] = [0.0, -fy, 0.0]
@@ -467,6 +512,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     if os.path.isdir(final):
         shutil.rmtree(final)
     os.rename(tmp, final)
+    # a user scale recorded earlier (ns rescale) survives a re-export: compose it into T_final again
+    try:
+        from pipeline.align import rescale as RS
+        if a.frame == "aligned" and abs(RS.factor(run) - 1.0) > 1e-9:
+            ex = RS.apply_to_export(run)
+            log(f"user scale {RS.factor(run):.4g} from 40_align/rescale.json applied to T_final: {ex}")
+    except Exception as e:  # never fail the export over this; the grid and bundle then use the automatic scale
+        log(f"WARNING could not apply the user scale from 40_align/rescale.json: {e}")
     log(f"done in {res['time_s']} s; gates {gates}")
     bad = [k for k, v in gates.items() if v is False]
     return 30 if bad else 0

@@ -112,6 +112,25 @@ class TestSynthetic(unittest.TestCase):
         self.assertTrue(1.0 <= res.h_cap_m <= 1.8)
         self.assertEqual(res.floor_info["method"], "ransac_plane")
 
+    def test_camera_pitch_bias_does_not_gate(self):
+        """Cameras whose mean up is 7 deg off (a pitched capture, as on honka) with level planes: the up stays right
+        and the 5 deg cue-disagreement gate does not fire (integrator change, 30 Oct; it fired on honka at 2.0 deg)."""
+        w = dict(self.world)
+        tilt = synth.rot_from_axis_angle(np.array([1.0, 0, 0.3]) / np.linalg.norm([1.0, 0, 0.3]), np.deg2rad(7.0))
+        C = -np.einsum("nji,nj->ni", w["R"], w["t"])
+        w["R"] = np.array([Ri @ tilt.T for Ri in w["R"]])
+        w["t"] = np.array([-w["R"][i] @ C[i] for i in range(len(C))])
+        R, t, P = synth.apply_raw_frame(w, np.eye(3), 1.0, np.zeros(3))
+        d = tempfile.mkdtemp(prefix="ns_synth_bias_")
+        synth.write_model(d, R, t, P)
+        res = core.align_model(cio.load_model(d), seed=0)
+        err = angle(res.up.up, self.truth["up"])
+        cam = res.up.cue_angles_deg["cameras"]
+        print(f"pitch bias 7 deg: up error {err:.2f} deg, camera cue {cam:.2f} deg from fused, flags {res.flags}")
+        self.assertLess(err, 3.0)
+        self.assertGreater(res.up.cue_spread_deg, 5.0)            # the old rule would have fired
+        self.assertFalse(any(f.startswith("up cues disagree") for f in res.flags))
+
     def test_user_height_changes_scale(self):
         m, Q, s0 = self._model(12)
         a = core.align_model(m, seed=0)

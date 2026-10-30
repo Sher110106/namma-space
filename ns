@@ -6,6 +6,7 @@
     ./ns check <video> [video...]     preflight on the Mac (pipeline/ingest/check_mac.py)
     ./ns run <video> --name N [--height CM] [--measure what=metres[:method]] [--quick] [--from STAGE] [--to STAGE]
     ./ns run --frames DIR --name N    same, from a folder of photos
+    ./ns run tyrone:/path/IMG.MOV --name N   a video (or --frames tyrone:/dir) already on the GPU host: linked, not copied
     ./ns run --name N --from train    resume: nothing is uploaded again, finished stages are skipped
     ./ns status <name>                stage table of a run on tyrone
     ./ns pull <name> [--light|--all]  copy results back to runs/<name>/ (big intermediates excluded)
@@ -119,6 +120,89 @@ def remote_run(name: str) -> str:
 
 def local_run(name: str) -> Path:
     return LOCAL_RUNS / name
+
+
+REMOTE_PREFIXES = ("tyrone:", "remote:")
+IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png")
+
+
+def remote_path(arg: str | None) -> str | None:
+    """'tyrone:/abs/path' (or 'remote:/abs/path') names a file or folder already on the GPU host."""
+    if arg and arg.startswith(REMOTE_PREFIXES):
+        p = arg.split(":", 1)[1]
+        if not p.startswith("/"):
+            die(f"{arg}: give an absolute path on the GPU host, e.g. tyrone:/home/sher/inbox/IMG_0421.MOV")
+        return p
+    return None
+
+
+def remote_probe(path: str, kind: str) -> dict | None:
+    """Size of a remote video, or image count and bytes of a remote frames folder. None if missing."""
+    q = shlex.quote(path)
+    if kind == "video":
+        res = ssh(f"test -f {q} && stat -L -c %s {q}", timeout=30)
+        if res.returncode != 0 or not res.stdout.strip().isdigit():
+            return None
+        return {"bytes": int(res.stdout.strip())}
+    res = ssh(f"test -d {q} && find -L {q} -maxdepth 1 -type f -printf '%f %s\\n'", timeout=60)
+    if res.returncode != 0:
+        return None
+    files = [ln.rsplit(" ", 1) for ln in res.stdout.splitlines() if " " in ln]
+    imgs = [(n, int(b)) for n, b in files if n.lower().endswith(IMAGE_SUFFIXES)]
+    return {"files": len(imgs), "bytes": sum(b for _, b in imgs)}
+
+
+def place_remote_input(src: str, rd: str, kind: str) -> int:
+    """Put a file or folder that is already on tyrone into runs/<name>/input/ without copying it over ssh.
+
+    Under the namma-space root (which containers see as /w) it becomes a relative symlink. Elsewhere it is
+    hard-linked (same disk, no extra space) or, failing that, copied, because containers cannot see it."""
+    import posixpath
+    dst = f"{rd}/input/frames" if kind == "frames" else f"{rd}/input/{posixpath.basename(src)}"
+    script = f"""
+set -e
+src=$(readlink -f {shlex.quote(src)})
+dst={shlex.quote(dst)}
+root=$(readlink -f {shlex.quote(RROOT)})
+mkdir -p {shlex.quote(rd)}/input
+if [ -L "$dst" ]; then rm "$dst"; fi
+if [ -e "$dst" ]; then echo "EXISTS $dst"; exit 0; fi
+case "$src" in
+  "$root"/*)
+    rel=$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$src" "$(dirname "$dst")")
+    ln -s "$rel" "$dst"; echo "LINK $rel" ;;
+  *)
+    if [ -d "$src" ]; then cp -rl "$src" "$dst" 2>/dev/null || cp -r "$src" "$dst"; else ln "$src" "$dst" 2>/dev/null || cp "$src" "$dst"; fi
+    echo "COPY $src" ;;
+esac
+"""
+    res = ssh(script, timeout=600)
+    if res.returncode != 0:
+        say(f"ns: could not place {src} in runs/: {res.stderr.strip()[:200]}")
+        return 20
+    say(f"[{stamp()}] input on tyrone: {res.stdout.strip()} -> {dst}")
+    return 0
+
+
+def remote_check(name: str, video_in_run: str) -> int:
+    """Run the preflight check on tyrone (the host has no ffmpeg; the gpu image does), then copy check.json back."""
+    import posixpath
+    rd_c = f"/w/runs/{name}"
+    vid_c = f"{rd_c}/input/{posixpath.basename(video_in_run)}"
+    cmd = (f"{RROOT}/bin/nsdocker ns-{name}-check namma-space-gpu:0.1 "
+           f"python3 pipeline/ingest/check_mac.py {shlex.quote(vid_c)} --run-dir {shlex.quote(rd_c)}")
+    say(f"[{stamp()}] preflight check on tyrone: {posixpath.basename(video_in_run)}")
+    res = ssh(cmd, timeout=900)
+    out = (res.stdout or "") + (res.stderr or "")
+    for ln in out.splitlines():
+        noise = ("==", "CUDA", "Container image", "This container", "By pulling", "https://", "A copy of", "WARNING: The NVIDIA",
+                 "Use the NVIDIA", "https://docs.nvidia")
+        if not ln.strip().startswith(noise) and ln.strip():
+            say("  " + ln)
+    lr = local_run(name)
+    (lr / "00_preflight").mkdir(parents=True, exist_ok=True)
+    rsync([f"{HOST}:{remote_run(name)}/00_preflight/", str(lr / "00_preflight") + "/"], quiet=True)
+    return res.returncode
 
 
 # ------------------------------------------------------------------ sync
@@ -288,6 +372,23 @@ def cmd_check(a) -> int:
     script = REPO / "pipeline" / "ingest" / "check_mac.py"
     if not script.exists():
         die("pipeline/ingest/check_mac.py is not present yet (W2 builds it); nothing to check")
+    rem = [remote_path(v) for v in a.videos]
+    if any(rem):
+        # videos already on tyrone: check them there (inside the gpu image, which has ffmpeg)
+        if not all(rem):
+            die("check Mac videos and tyrone: videos in separate calls")
+        bad = 0
+        sync_code(quiet=True)
+        for rp in rem:
+            if remote_probe(rp, "video") is None:
+                die(f"no such video on tyrone: {rp}")
+            nm = valid_name(a.name) if a.name else "check-" + re.sub(r"[^a-z0-9]+", "-", Path(rp).stem.lower())[:30].strip("-")
+            if place_remote_input(rp, remote_run(nm), "video") != 0:
+                return 20
+            rc = remote_check(nm, rp)
+            bad = max(bad, rc)
+            say(f"check.json: {local_run(nm) / '00_preflight' / 'check.json'}")
+        return bad
     cmd = [sys.executable, str(script), *a.videos]
     if a.name:
         cmd += ["--run-dir", str(local_run(valid_name(a.name)))]
@@ -302,7 +403,9 @@ LIGHT_FILTER = ["--exclude=*.tmp", "--exclude=*.prev", "--exclude=*.failed", "--
                 "--include=*/", "--include=*.json", "--include=*.txt", "--include=logs/***", "--include=figures/***",
                 "--include=*.md", "--exclude=*"]
 FULL_EXCLUDES = ["input/", "*.db", "30_undist/images/", "40_align/images", "10_frames/images/", "50_train/*/ply/",
-                 "50_train/*/ckpts/", "50_train/*/renders/", "*.tmp", "*.prev", "*.failed", ".runner.lock", "20_sfm/*/sparse/"]
+                 "50_train/*/ckpts/", "50_train/*/renders/", "*.tmp", "*.prev", "*.failed", ".runner.lock", "20_sfm/*/sparse/",
+                 "60_export/*.ply", "55_geometry/*.ply",   # cleaned PLY and mesh: 100s of MB, not needed on the Mac
+                 "20_sfm/*/clean/", "30_undist/sparse/", "40_align/sparse/"]   # COLMAP models: 20-60 MB a run, read only on tyrone
 
 
 def pull_args(a, name: str, light: bool) -> list:
@@ -314,7 +417,8 @@ def pull_args(a, name: str, light: bool) -> list:
     if getattr(a, "with_frames", False) or getattr(a, "all", False):
         ex = [e for e in ex if e != "10_frames/images/"]
     if getattr(a, "with_ply", False) or getattr(a, "all", False):
-        ex = [e for e in ex if e not in ("50_train/*/ply/", "50_train/*/ckpts/", "50_train/*/renders/")]
+        ex = [e for e in ex if e not in ("50_train/*/ply/", "50_train/*/ckpts/", "50_train/*/renders/",
+                                         "60_export/*.ply", "55_geometry/*.ply")]
     if getattr(a, "all", False):
         ex = [e for e in ex if e in ("*.tmp", "*.prev", "*.failed", ".runner.lock")]
     args = []
@@ -384,6 +488,10 @@ def build_runner_flags(a) -> list:
         flags += ["--to", a.to]
     if a.quick:
         flags += ["--quick"]
+    if getattr(a, "geometry", False):
+        flags += ["--with-optional"]
+    for mo in getattr(a, "manual_override", None) or []:
+        flags += [f"--manual-override={mo}"]
     for o in a.opt or []:
         flags += ["--opt", o]
     for rf in a.runner_flag or []:
@@ -506,44 +614,66 @@ def cmd_run(a) -> int:
     except OSError:
         caff = None
 
-    uploads = []  # (run name, source Path, kind)
-    if a.video:
-        v = Path(a.video).expanduser()
+    uploads = []  # (run name, source Path or remote path str, kind, remote info dict or None)
+
+    def add_video(run_name: str, arg: str) -> None:
+        rp = remote_path(arg)
+        if rp:
+            info = remote_probe(rp, "video")
+            if info is None:
+                die(f"no such video on tyrone: {rp}")
+            uploads.append((run_name, rp, "video", info))
+            return
+        v = Path(arg).expanduser()
         if not v.is_file():
             die(f"no such video: {v}")
-        uploads.append((name, v, "video"))
+        uploads.append((run_name, v, "video", None))
+
+    if a.video:
+        add_video(name, a.video)
     if a.frames:
-        f = Path(a.frames).expanduser()
-        if not f.is_dir():
-            die(f"no such frames directory: {f}")
-        uploads.append((name, f, "frames"))
-        n_img = sum(1 for x in f.iterdir() if x.suffix.lower() in (".jpg", ".jpeg", ".png"))
+        rp = remote_path(a.frames)
+        if rp:
+            info = remote_probe(rp, "frames")
+            if info is None:
+                die(f"no such frames directory on tyrone: {rp}")
+            uploads.append((name, rp, "frames", info))
+            n_img = info["files"]
+        else:
+            f = Path(a.frames).expanduser()
+            if not f.is_dir():
+                die(f"no such frames directory: {f}")
+            uploads.append((name, f, "frames", None))
+            n_img = sum(1 for x in f.iterdir() if x.suffix.lower() in IMAGE_SUFFIXES)
         if n_img < 60 and not any(o.startswith("ingest:") for o in a.opt):
             say(f"ns: {n_img} images is below the 60 that ingest wants; it will exit 10. "
                 "For a tiny test set add: --opt ingest:--force")
     if a.take_b:
-        vb = Path(a.take_b).expanduser()
-        if not vb.is_file():
-            die(f"no such video: {vb}")
-        uploads.append((name + "-b", vb, "video"))
+        add_video(name + "-b", a.take_b)
 
     if not resume_only:
-        for n, src, kind in uploads:
+        for n, src, kind, rinfo in uploads:
             lr = local_run(n)
             lr.mkdir(parents=True, exist_ok=True)
+            src_name = Path(str(src)).name
+            if rinfo is not None:
+                files = ([{"name": src_name, "bytes": rinfo["bytes"], "on_host": str(src)}] if kind == "video" else
+                         [{"name": "frames/", "files": rinfo["files"], "bytes": rinfo["bytes"], "on_host": str(src)}])
+            else:
+                files = ([{"name": src.name, "bytes": src.stat().st_size}] if kind == "video" else
+                         [{"name": "frames/", "files": sum(1 for x in src.iterdir() if x.is_file() and x.name != ".DS_Store"),
+                           "bytes": sum(x.stat().st_size for x in src.iterdir() if x.is_file())}])
             meta = {"name": n, "height_cm": a.height, "measures": parse_measures(a.measure), "notes": a.note or "",
                     "provenance": {k: v for k, v in (("kind", a.kind), ("license", a.license), ("attribution", a.attribution),
                                                      ("source", a.source), ("title", a.title)) if v},
                     "takes": [{"id": "B" if n.endswith("-b") else "A", "kind": kind,
-                               "file": src.name if kind == "video" else None,
+                               "file": src_name if kind == "video" else None,
                                "frames_dir": "frames" if kind == "frames" else None}],
-                    "files": ([{"name": src.name, "bytes": src.stat().st_size}] if kind == "video" else
-                              [{"name": "frames/", "files": sum(1 for x in src.iterdir() if x.is_file() and x.name != ".DS_Store"),
-                                "bytes": sum(x.stat().st_size for x in src.iterdir() if x.is_file())}]),
+                    "files": files,
                     "created": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
             (lr / "input").mkdir(exist_ok=True)
             (lr / "input" / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
-            if kind == "video" and not a.no_check:
+            if kind == "video" and not a.no_check and rinfo is None:
                 chk = REPO / "pipeline" / "ingest" / "check_mac.py"
                 if chk.exists():
                     say(f"[{stamp()}] preflight check on {src.name}")
@@ -560,24 +690,32 @@ def cmd_run(a) -> int:
             say("ns: code sync failed; is ssh up? (./ns doctor)")
             return 20
 
-    for n, src, kind in uploads:
+    for n, src, kind, rinfo in uploads:
         rd = remote_run(n)
         res = ssh(f"mkdir -p {rd}/input", timeout=30)
         if res.returncode != 0:
             say(f"ns: cannot reach tyrone: {res.stderr.strip()[:120]}")
             return 20
-        say(f"[{stamp()}] upload {src.name} -> runs/{n}/input/")
-        if kind == "video":
-            rc = rsync(["--partial", str(src), f"{HOST}:{rd}/input/"])
+        if rinfo is not None:  # already on tyrone: link it into the run, nothing crosses the network
+            rc = place_remote_input(str(src), rd, kind)
         else:
-            rc = rsync(["--exclude", ".DS_Store", str(src) + "/", f"{HOST}:{rd}/input/frames/"])
+            say(f"[{stamp()}] upload {src.name} -> runs/{n}/input/")
+            if kind == "video":
+                rc = rsync(["--partial", str(src), f"{HOST}:{rd}/input/"])
+            else:
+                rc = rsync(["--exclude", ".DS_Store", str(src) + "/", f"{HOST}:{rd}/input/frames/"])
         if rc == 0:
             rc = rsync([str(local_run(n) / "input" / "meta.json"), f"{HOST}:{rd}/input/meta.json"])
         if rc != 0:
             say(f"ns: upload failed (rsync exit {rc})")
             return 20
+        if rinfo is not None and kind == "video" and not a.no_check:
+            rc = remote_check(n, str(src))
+            if rc == 10 and not a.force:
+                say("ns: the check says FAIL (capture problem). Fix it, reshoot, or pass --force to try anyway.")
+                return 10
     if uploads and not a.from_stage:
-        for n, _, _ in uploads:
+        for n, _, _, _ in uploads:
             if "yes" in ssh(f"test -e {remote_run(n)}/10_frames/frames.json && echo yes", timeout=20).stdout:
                 say(f"ns: runs/{n} already has finished stages; they are skipped. "
                     f"To redo from the new input use --from ingest, or pick a new --name.")
@@ -626,8 +764,12 @@ def cmd_run(a) -> int:
         if cmd_pull(argparse.Namespace(name=n, light=False, force=a.force, with_frames=False, with_ply=False, all=False), n, light=False) != 0:
             final = max(final, 20, key=lambda c: prio.get(c, 4))
             continue
-        if code in (0, 11, 30):
-            post_pull(n)
+        if code in (0, 11, 30) and a.to and a.to not in ("grid",) and not (local_run(n) / "60_export" / "export.json").exists():
+            say(f"ns: stopped after {a.to} as asked (--to); no bundle, verify or report")
+        elif code in (0, 11, 30):
+            pc = post_pull(n)
+            if pc:
+                final = max(final, pc, key=lambda c: prio.get(c, 4))
         elif code == 10:
             say(f"ns: capture problem in {n}. See runs/{n}/logs/ and 10_frames/frames.json; reshoot the listed ranges.")
         else:
@@ -646,15 +788,51 @@ def cmd_run(a) -> int:
     return final
 
 
-def post_pull(name: str) -> None:
-    """Mac-side steps after a pull: bundle, verify, report. Each is skipped with a message when absent."""
-    for step in (cmd_bundle_run, cmd_verify_run, cmd_report_run):
+MAC_STEP_LIMIT_S = {"bundle": 600, "verify": 1200}   # a hung Chrome or a stuck copy must not hold `ns run` forever
+
+
+def run_limited(cmd: list, limit_s: float, label: str) -> int:
+    """subprocess.run with a wall limit; the whole process group is killed when it is exceeded (exit 124)."""
+    p = subprocess.Popen(cmd, start_new_session=True)
+    try:
+        return p.wait(timeout=limit_s)
+    except subprocess.TimeoutExpired:
+        say(f"ns: {label} ran {limit_s / 60:.0f} min (limit); stopping it")
         try:
-            step(name)
+            os.killpg(p.pid, 15)
+            p.wait(timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                os.killpg(p.pid, 9)
+            except OSError:
+                pass
+        return 124
+
+
+def post_pull(name: str) -> int:
+    """Mac-side steps after a pull: bundle, verify, report. Each is skipped with a message when absent.
+
+    Returns an exit code to combine with the remote one: 20 when the bundle or report could not be built
+    (nothing to ship), 30 when the viewer checks failed (a bundle exists but needs review), else 0."""
+    worst = 0
+    try:
+        stub = bool(json.loads((local_run(name) / "60_export" / "export.json").read_text()).get("stub"))
+    except (OSError, ValueError):
+        stub = False
+    for step, fail_code in ((cmd_bundle_run, 20), (cmd_verify_run, 30), (cmd_report_run, 20)):
+        try:
+            rc = step(name)
         except SystemExit:
             raise
         except Exception as exc:  # a broken step must not hide the others
             say(f"ns: {step.__name__} failed: {exc}")
+            rc = 1
+        if rc and stub:   # test stubs write no splats or grid images; the Mac steps cannot succeed there
+            say(f"ns: {step.__name__.replace('cmd_', '').replace('_run', '')} exited {rc} on a stub run; not counted")
+        elif rc:
+            say(f"ns: {step.__name__.replace('cmd_', '').replace('_run', '')} exited {rc}; run exit at least {fail_code}")
+            worst = fail_code if worst != 20 else worst
+    return worst
 
 
 def cmd_bundle_run(name: str) -> int:
@@ -670,7 +848,7 @@ def cmd_bundle_run(name: str) -> int:
         if prov.get(key):
             cmd += [flag, str(prov[key])]
     say(f"[{stamp()}] bundle: {' '.join(shlex.quote(c) for c in cmd[1:])}")
-    return subprocess.run(cmd).returncode
+    return run_limited(cmd, MAC_STEP_LIMIT_S["bundle"], "bundle")
 
 
 def cmd_verify_run(name: str) -> int:
@@ -689,8 +867,11 @@ def cmd_verify_run(name: str) -> int:
     pairs = run / "60_export" / "heldout" / "pairs.json"
     if pairs.exists():
         cmd += ["--pairs", str(pairs)]
+    parity = run / "60_export" / "parity"
+    if (parity / "parity.json").exists():   # gsplat renders of the shipped SD file: test H4b (browser vs gsplat)
+        cmd += ["--parity", str(parity)]
     say(f"[{stamp()}] verify: {' '.join(shlex.quote(c) for c in cmd[1:])}")
-    return subprocess.run(cmd).returncode
+    return run_limited(cmd, MAC_STEP_LIMIT_S["verify"], "verify")
 
 
 def cmd_report_run(name: str) -> int:
@@ -822,10 +1003,12 @@ def cmd_rescale(a) -> int:
     opts = []
     if a.use_measures:
         opts.append("--use-measures")
-    if a.scale is not None:
-        opts.append(f"--scale={a.scale}")
-    if a.factor is not None:
-        opts.append(f"--factor={a.factor}")
+    if a.scale is not None:            # total factor relative to the automatic scale (rescale.py --set-total)
+        opts.append(f"--set-total={a.scale}")
+    if a.factor is not None:           # multiply the current factor (rescale.py --scale)
+        opts.append(f"--scale={a.factor}")
+    if len(opts) > 1:
+        die("give only one of --scale, --factor, --use-measures")
     if not opts:
         die("give --scale K, --factor K or --use-measures")
     t0 = time.time()
@@ -840,15 +1023,16 @@ def cmd_rescale(a) -> int:
         return 20
     results = poll_runs({name: pid}, light_pull=False)
     code = results.get(name, 20)
-    if code != 0:
+    if code not in (0, 11, 30):   # 30: the grid stage used a fallback; the rescale itself went through
         say(f"ns: rescale failed with exit {code}; see runs/{name}/logs/rescale.log and grid.log on tyrone")
         return code
     if cmd_pull(argparse.Namespace(name=name, light=False, force=a.force, with_frames=False, with_ply=False, all=False), name, light=False) != 0:
         return 20
-    post_pull(name)
+    pc = post_pull(name)
     secs = time.time() - t0
     say(f"rescale done in {secs:.0f}s" + ("" if secs <= 300 else "  (over the 5 minute target)"))
-    return 0
+    prio = {0: 0, 11: 1, 30: 2, 10: 3, 20: 4}
+    return max(code, pc, key=lambda c: prio.get(c, 4))
 
 
 # ------------------------------------------------------------------ package and publish
@@ -1087,6 +1271,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title")
     p.add_argument("--take-b", help="second video; runs as <name>-b in parallel")
     p.add_argument("--quick", action="store_true", help="7k-step training")
+    p.add_argument("--geometry", action="store_true", help="also run the optional TSDF mesh stage (55_geometry, P1)")
+    p.add_argument("--manual-override", action="append", default=[],
+                   help="record a manual step in run.json manual_overrides (e.g. why a run was restarted)")
     p.add_argument("--from", dest="from_stage", choices=STAGES)
     p.add_argument("--to", choices=STAGES)
     p.add_argument("--opt", action="append", default=[], help="STAGE:ARG passed to one stage")
@@ -1129,8 +1316,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("rescale", help="change scale without retraining")
     p.add_argument("name")
-    p.add_argument("--scale", type=float, help="new absolute scale")
-    p.add_argument("--factor", type=float, help="multiply the current scale by this")
+    p.add_argument("--scale", type=float, help="total scale factor relative to the automatic estimate (1.0 = automatic)")
+    p.add_argument("--factor", type=float, help="multiply the current scale by this (1.05 = 5%% larger)")
     p.add_argument("--use-measures", action="store_true", help="adopt the scale of your tape distances")
     p.add_argument("--no-sync", action="store_true")
     p.add_argument("--runner-flag", action="append", default=[])

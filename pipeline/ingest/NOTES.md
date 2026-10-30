@@ -79,3 +79,10 @@ nsdocker w2-test-ingest namma-space-gpu:0.1 python -m unittest discover -s test/
 nsdocker w2-sweep namma-space-gpu:0.1 python -m pipeline.ingest.tonemap_sweep /w/data/fixtures/videos
 python3 -m unittest discover -s test/unit/ingest -p test_check_mac.py -v          # Mac
 ```
+
+## Integrator addition (30 Oct): a phone-like clip with real camera motion
+`python -m pipeline.ingest.make_phone_fixture --frames DIR --out FILE.mov` packs a folder of real photos as an
+iPhone-style portrait HDR clip: HEVC Main10 (hvc1), BT.2020 + HLG, stored landscape with a "rotate 90" display matrix,
+30 fps, each photo held 0.5 s. b1-b7 are crop pans of still photos, so SfM cannot use them (b7: 28-36% registered).
+Built from the 335 honka photos: `/home/sher/namma-space/inbox/honka_phone_hlg.mov` (34.7 MB, 167 s, 137 s to build).
+Ingest on it: 1,340 candidates, 303 kept, 738x994 upright, `hdr: hlg`, `tonemap: zscale`, 29.6 s.
