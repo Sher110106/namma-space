@@ -1,0 +1,430 @@
+{
+  "product": [
+    {
+      "name": "COLMAP",
+      "version": "4.2.1",
+      "license": "BSD-3-Clause (core)",
+      "source": "https://github.com/colmap/colmap",
+      "role": "SfM and camera poses",
+      "verdict": "allowed; SiftGPU and LSD are never called"
+    },
+    {
+      "name": "ONNX Runtime",
+      "version": "bundled with COLMAP",
+      "license": "MIT",
+      "source": "https://github.com/microsoft/onnxruntime",
+      "role": "runs ALIKED and LightGlue",
+      "verdict": "allowed"
+    },
+    {
+      "name": "ALIKED N32 ONNX",
+      "version": "COLMAP release asset",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/colmap/colmap",
+      "role": "image features",
+      "verdict": "allowed"
+    },
+    {
+      "name": "LightGlue ONNX (ALIKED and SIFT)",
+      "version": "COLMAP release assets",
+      "license": "Apache-2.0",
+      "source": "https://github.com/colmap/colmap",
+      "role": "feature matching",
+      "verdict": "allowed; SuperPoint is not used"
+    },
+    {
+      "name": "COLMAP vocabulary trees",
+      "version": "ALIKED-N32 and SIFT",
+      "license": "not separately stated",
+      "source": "https://github.com/colmap/colmap/releases",
+      "role": "loop detection",
+      "verdict": "allowed as project assets; unverified separate notice"
+    },
+    {
+      "name": "PyTorch",
+      "version": "2.4.1",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/pytorch/pytorch",
+      "role": "training runtime",
+      "verdict": "allowed"
+    },
+    {
+      "name": "gsplat",
+      "version": "1.5.3",
+      "license": "Apache-2.0",
+      "source": "https://github.com/nerfstudio-project/gsplat",
+      "role": "Gaussian splat training and rendering",
+      "verdict": "allowed"
+    },
+    {
+      "name": "fused-ssim",
+      "version": "git 328dc98",
+      "license": "MIT",
+      "source": "https://github.com/rahul-goel/fused-ssim",
+      "role": "training loss helper",
+      "verdict": "allowed"
+    },
+    {
+      "name": "fused-bilagrid",
+      "version": "git 90f9788",
+      "license": "MIT",
+      "source": "https://github.com/harry7557558/fused-bilagrid",
+      "role": "bilateral grid for exposure changes (gsplat example dependency)",
+      "verdict": "allowed"
+    },
+    {
+      "name": "torchmetrics",
+      "version": "pinned image version",
+      "license": "Apache-2.0",
+      "source": "https://github.com/Lightning-AI/torchmetrics",
+      "role": "LPIPS evaluation",
+      "verdict": "allowed; weights are eval-only"
+    },
+    {
+      "name": "LPIPS AlexNet ImageNet weights",
+      "version": "torchmetrics checkpoint",
+      "license": "weight terms unverified",
+      "source": "https://github.com/richzhang/PerceptualSimilarity",
+      "role": "evaluation metric only",
+      "verdict": "unverified; outside the product path"
+    },
+    {
+      "name": "tyro",
+      "version": "image-pinned",
+      "license": "MIT",
+      "source": "https://github.com/brentyi/tyro",
+      "role": "gsplat example dependency (trainer CLI, unused viewer, COLMAP model reader)",
+      "verdict": "allowed; licence read from package metadata in namma-space-gpu:0.2"
+    },
+    {
+      "name": "nerfview",
+      "version": "image-pinned",
+      "license": "MIT",
+      "source": "https://github.com/nerfstudio-project/nerfview",
+      "role": "gsplat example dependency (trainer CLI, unused viewer, COLMAP model reader)",
+      "verdict": "allowed; licence read from package metadata in namma-space-gpu:0.2"
+    },
+    {
+      "name": "viser",
+      "version": "image-pinned",
+      "license": "MIT",
+      "source": "https://github.com/nerfstudio-project/viser",
+      "role": "gsplat example dependency (trainer CLI, unused viewer, COLMAP model reader)",
+      "verdict": "allowed; licence read from package metadata in namma-space-gpu:0.2"
+    },
+    {
+      "name": "pycolmap",
+      "version": "image-pinned",
+      "license": "MIT (fork rmbrualla/pycolmap, package metadata)",
+      "source": "https://github.com/rmbrualla/pycolmap",
+      "role": "gsplat example dependency (trainer CLI, unused viewer, COLMAP model reader)",
+      "verdict": "allowed; licence read from package metadata in namma-space-gpu:0.2"
+    },
+    {
+      "name": "moge",
+      "version": "2.0.0 code; moge-2-vitl-normal weights (2026-09)",
+      "license": "MIT; DINOv2 parts Apache-2.0",
+      "source": "https://github.com/microsoft/MoGe",
+      "role": "optional metric depth cue",
+      "verdict": "allowed; training-data terms unverified"
+    },
+    {
+      "name": "Open3D",
+      "version": "0.20.0",
+      "license": "MIT",
+      "source": "https://github.com/isl-org/Open3D",
+      "role": "geometry and free-space checks",
+      "verdict": "allowed"
+    },
+    {
+      "name": "numpy",
+      "version": "image-pinned",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/numpy/numpy",
+      "role": "geometry, grid and file IO",
+      "verdict": "allowed"
+    },
+    {
+      "name": "scipy",
+      "version": "image-pinned",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/scipy/scipy",
+      "role": "geometry, grid and file IO",
+      "verdict": "allowed"
+    },
+    {
+      "name": "scikit-image",
+      "version": "image-pinned",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/scikit-image/scikit-image",
+      "role": "geometry, grid and file IO",
+      "verdict": "allowed"
+    },
+    {
+      "name": "scikit-learn",
+      "version": "image-pinned",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/scikit-learn/scikit-learn",
+      "role": "geometry, grid and file IO",
+      "verdict": "allowed"
+    },
+    {
+      "name": "shapely",
+      "version": "image-pinned",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/shapely/shapely",
+      "role": "geometry, grid and file IO",
+      "verdict": "allowed"
+    },
+    {
+      "name": "trimesh",
+      "version": "image-pinned",
+      "license": "MIT",
+      "source": "https://github.com/mikedh/trimesh",
+      "role": "geometry, grid and file IO",
+      "verdict": "allowed"
+    },
+    {
+      "name": "opencv-python-headless",
+      "version": "4.10.0.84",
+      "license": "Apache-2.0",
+      "source": "https://github.com/opencv/opencv",
+      "role": "frame checks and image IO",
+      "verdict": "allowed; headless wheel, no non-free modules"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "Ubuntu build",
+      "license": "GPL-2+ binary, separate process",
+      "source": "https://ffmpeg.org/legal.html",
+      "role": "decode, frame selection and video encode",
+      "verdict": "copyleft allowed; not linked into product"
+    },
+    {
+      "name": "Node.js",
+      "version": "22",
+      "license": "MIT",
+      "source": "https://nodejs.org/",
+      "role": "SPZ export tool runtime",
+      "verdict": "allowed"
+    },
+    {
+      "name": "splat-transform",
+      "version": "3.10.3",
+      "license": "MIT",
+      "source": "https://github.com/playcanvas/splat-transform",
+      "role": "PLY to SPZ export",
+      "verdict": "allowed"
+    },
+    {
+      "name": "SPZ format",
+      "version": "3/4",
+      "license": "MIT",
+      "source": "https://github.com/nianticlabs/spz",
+      "role": "compact web splat asset",
+      "verdict": "allowed"
+    },
+    {
+      "name": "Spark",
+      "version": "2.4.0",
+      "license": "MIT",
+      "source": "https://github.com/sparkjsdev/spark",
+      "role": "browser splat renderer",
+      "verdict": "allowed"
+    },
+    {
+      "name": "three.js",
+      "version": "r180 (vendored build)",
+      "license": "MIT",
+      "source": "https://github.com/mrdoob/three.js",
+      "role": "browser camera and controls",
+      "verdict": "allowed"
+    },
+    {
+      "name": "Playwright headless Chrome",
+      "version": "cached",
+      "license": "Apache-2.0 / BSD components",
+      "source": "https://playwright.dev/",
+      "role": "PDF, screenshot and viewer checks",
+      "verdict": "dev tool only"
+    }
+  ],
+  "evaluation": [
+    {
+      "name": "MuSHRoom",
+      "version": "dataset release",
+      "license": "CC BY 4.0 (Zenodo records 10230733, 10222321)",
+      "source": "https://zenodo.org/records/10230733",
+      "role": "public reconstruction test data",
+      "verdict": "credited; not user data"
+    },
+    {
+      "name": "Mip-NeRF 360 room",
+      "version": "dataset release",
+      "license": "CC BY 4.0 (stated on the SMERF data page; medium confidence)",
+      "source": "https://smerf-3d.github.io/#data",
+      "role": "public evaluation data",
+      "verdict": "credited"
+    },
+    {
+      "name": "Zip-NeRF Berlin",
+      "version": "dataset release",
+      "license": "CC BY 4.0 (stated on the SMERF data page; medium confidence)",
+      "source": "https://smerf-3d.github.io/#data",
+      "role": "public evaluation data",
+      "verdict": "credited; used for internal tests only; never hosted (private home)"
+    }
+  ],
+  "system": [
+    {
+      "name": "NVIDIA driver, CUDA 12.x runtime, cuDNN 9",
+      "version": "host/image supplied",
+      "license": "NVIDIA proprietary system libraries",
+      "source": "https://developer.nvidia.com/cuda-eula",
+      "role": "GPU execution",
+      "verdict": "system dependency; not bundled by our code"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "SuperPoint, SuperGlue, superpoint_lightglue",
+      "reason": "organizer ruling excludes these non-commercial components"
+    },
+    {
+      "name": "Inria 3DGS and forks (2DGS, Mip-Splatting, PGSR, Taming-3DGS)",
+      "reason": "Inria Gaussian-Splatting licence: research and evaluation only, non-commercial"
+    },
+    {
+      "name": "DUSt3R, MASt3R, MASt3R-SLAM",
+      "reason": "CC BY-NC-SA 4.0 code and weights (non-commercial)"
+    },
+    {
+      "name": "VGGT-1B and VGGT-Omega",
+      "reason": "custom or unclear licence"
+    },
+    {
+      "name": "Pi3/Pi3X, Depth Pro, UniDepth, DSINE, Omnidata, Metric3D weights",
+      "reason": "weight licence is non-commercial or not stated"
+    },
+    {
+      "name": "Depth Anything 3 Large/Giant/Nested and DA-V2 Base/Large",
+      "reason": "weight licence or model terms do not fit this submission"
+    },
+    {
+      "name": "SAM 3 and VGGT-1B-Commercial",
+      "reason": "custom licence, not OSI-approved"
+    },
+    {
+      "name": "Ultralytics YOLO",
+      "reason": "AGPL dependency is unnecessary for the Round 1 product path"
+    },
+    {
+      "name": "LoMa weights and hloc r2d2/superpoint/superglue modules",
+      "reason": "unverified or non-commercial weights"
+    }
+  ],
+  "disclosures": [
+    "The stock COLMAP CUDA image compiles SiftGPU and LSD. Namma Space never calls either path: feature extraction uses ALIKED or CPU SIFT, and alignment does not use the LSD-based Manhattan aligner.",
+    "NVIDIA driver, CUDA and cuDNN are proprietary system libraries supplied by the host or image. They are execution dependencies, not code shipped in this repository."
+  ],
+  "base_image": [
+    {
+      "name": "plyfile",
+      "license": "GPL-3.0-or-later",
+      "source": "https://github.com/dranjan/python-plyfile",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "copyleft; installed by our image recipe but unused (our code reads PLY with numpy); remove from the next image"
+    },
+    {
+      "name": "hypothesis",
+      "license": "MPL-2.0",
+      "source": "https://github.com/HypothesisWorks/hypothesis",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "weak copyleft test tool; unused"
+    },
+    {
+      "name": "conda-build",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/conda/conda-build",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; unused"
+    },
+    {
+      "name": "mamba",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/mamba-org/mamba",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; unused"
+    },
+    {
+      "name": "lief",
+      "license": "Apache-2.0",
+      "source": "https://github.com/lief-project/LIEF",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; unused"
+    },
+    {
+      "name": "lintrunner",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/suo/lintrunner",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; unused"
+    },
+    {
+      "name": "torchaudio",
+      "license": "BSD-2-Clause",
+      "source": "https://github.com/pytorch/audio",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; unused"
+    },
+    {
+      "name": "torchelastic",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/pytorch/elastic",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; unused"
+    },
+    {
+      "name": "tensorboard",
+      "license": "Apache-2.0",
+      "source": "https://github.com/tensorflow/tensorboard",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; gsplat example logging"
+    },
+    {
+      "name": "tensorly",
+      "license": "BSD-3-Clause",
+      "source": "https://github.com/tensorly/tensorly",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; gsplat example dependency"
+    },
+    {
+      "name": "splines",
+      "license": "MIT",
+      "source": "https://github.com/AudioSceneDescriptionFormat/splines",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; gsplat example dependency"
+    },
+    {
+      "name": "torch-fidelity",
+      "license": "Apache-2.0",
+      "source": "https://github.com/toshas/torch-fidelity",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; unused"
+    },
+    {
+      "name": "imageio-ffmpeg",
+      "license": "BSD-2-Clause",
+      "source": "https://github.com/imageio/imageio-ffmpeg",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; bundles an ffmpeg binary run as a separate process"
+    },
+    {
+      "name": "astunparse, brotli, cffi, colorama, exceptiongroup, expecttest, h2, importlib-resources, optree, pickleshare, pip, pkgutil-resolve-name, pysocks, types-dataclasses",
+      "license": "BSD, MIT or Apache-2.0 (package metadata)",
+      "source": "https://pypi.org/",
+      "role": "ships with the PyTorch base image or as a transitive dependency; not imported by Namma Space code",
+      "verdict": "allowed; base-image helpers, unused"
+    }
+  ]
+}
