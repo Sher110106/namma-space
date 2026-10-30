@@ -1,0 +1,11 @@
+{
+ "up_resid_deg": null,
+ "h_cap_m": 1.42,
+ "scale": {
+  "value": 2.505764,
+  "pct_68": 15.0,
+  "method": "assumed: median camera height = 1.42 m",
+  "cues": [],
+  "checked_against": null
+ }
+}

@@ -1,0 +1,13 @@
+runs/
+inbox/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+viewer/dist/scenes/
+*.ply
+*.spz
+!test/data/**/*.spz
+.venv/
+**/.venv/
+viewer/test/last_run/*.png

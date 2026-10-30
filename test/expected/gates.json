@@ -1,0 +1,23 @@
+{
+  "schema": "namma-space/gates@1",
+  "doc": "Pass/fail gates for a run's report.json. Every value is a gate from FINAL_PLAN (reference in 'ref'), not a measurement. Expected measured values go in report.json after real runs; this file never holds results. [E] marks the plan's own estimates. 'modes': 'full' gates apply to a 30k-step run, 'quick' to a 7k preview, 'any' to both.",
+  "gates": [
+    {"id": "sfm.reg_frac", "path": "sfm.variants[chosen].reg_frac", "op": ">=", "value": 0.90, "modes": ["any"], "ref": "section 4: registered share >= 90%"},
+    {"id": "sfm.reproj_px", "path": "sfm.variants[chosen].reproj_px", "op": "<=", "value": 1.2, "modes": ["any"], "ref": "section 4: reprojection <= 1.2 px"},
+    {"id": "align.up_resid_deg", "path": "align.up_resid_deg", "op": "<=", "value": 5.0, "modes": ["any"], "ref": "section 2.4: flag the scene when cues disagree by more than 5 degrees"},
+    {"id": "align.h_cap_m", "path": "align.h_cap_m", "op": "between", "value": [1.0, 1.8], "modes": ["any"], "ref": "section 2.4 and test D5: eye height 1.0-1.8 m"},
+    {"id": "train.psnr", "path": "train.variants[chosen].psnr", "op": ">=", "value": 22.0, "modes": ["full"], "ref": "section 4: sanity >= 22 dB [E]"},
+    {"id": "train.n_gs", "path": "train.variants[chosen].n_gs", "op": "<=", "value": 1500000, "modes": ["any"], "ref": "test E2: <= 1.5 M splats"},
+    {"id": "export.sd.count", "path": "export.sd.count", "op": "<=", "value": 1000000, "modes": ["any"], "ref": "section 2.12: SD <= 1.0 M splats"},
+    {"id": "export.sd.mb", "path": "export.sd.mb", "op": "<=", "value": 40, "modes": ["any"], "ref": "test F1: SD <= 40 MB"},
+    {"id": "export.hd.mb", "path": "export.hd.mb", "op": "<=", "value": 90, "modes": ["any"], "optional": true, "ref": "test F1: HD <= 90 MB"},
+    {"id": "export.preview.mb", "path": "export.preview.mb", "op": "<=", "value": 4, "modes": ["any"], "optional": true, "ref": "test F1: preview <= 4 MB"},
+    {"id": "grid.spawn_ok", "path": "grid.spawn_ok", "op": "==", "value": true, "modes": ["any"], "ref": "test G1: the spawn is walkable"},
+    {"id": "grid.path_coverage", "path": "grid.path_coverage", "op": ">=", "value": 0.90, "modes": ["any"], "ref": "section 6.5: step down when path coverage < 90%"},
+    {"id": "walls.penetrations", "path": "walls.penetrations", "op": "==", "value": 0, "modes": ["any"], "ref": "test H3: 0 sampled positions in blocked cells"},
+    {"id": "viewer.fps_mean", "path": "viewer.devices[*].fps_mean", "op": ">=", "value": 55, "modes": ["any"], "ref": "test H2: >= 55 fps"},
+    {"id": "viewer.p95_ms", "path": "viewer.devices[*].p95_ms", "op": "<=", "value": 20, "modes": ["any"], "ref": "test H2: p95 frame time <= 20 ms"},
+    {"id": "viewer.first_frame_s", "path": "viewer.devices[*].first_frame_s", "op": "<=", "value": 5, "modes": ["any"], "ref": "test H1: first frame <= 5 s from localhost"},
+    {"id": "timings.total", "path": "timings.total", "op": "<=", "value": 6000, "modes": ["full"], "ref": "test 0.7: unattended rehearsal <= 100 min [E] (seconds)"}
+  ]
+}

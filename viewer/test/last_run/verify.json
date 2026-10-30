@@ -1,0 +1,521 @@
+{
+  "schema": "namma-space/verify@1",
+  "date": "2026-10-29T23:01:41.975Z",
+  "web": "/Users/sher/project/namma-space/viewer/dist",
+  "scene": null,
+  "browser": "HeadlessChrome/156.0.8078.4",
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+  "viewport": "1280x720, device pixel ratio 1",
+  "summary": {
+    "passed": 21,
+    "failed": 0,
+    "not_run": 1
+  },
+  "tests": [
+    {
+      "id": "H1",
+      "name": "first splat frame <= 5 s from localhost, cold cache; 0 console errors; 0 foreign-origin requests",
+      "pass": true,
+      "value": "first frame 0.40 s; 0 console errors; 0 foreign requests",
+      "metrics": {
+        "first_frame_s": 0.396,
+        "full_loaded_s": 0.764,
+        "console_errors": [],
+        "foreign_requests": [],
+        "n_requests": 21
+      },
+      "detail": "30ms scene url http://127.0.0.1:50332/scenes/honka_demo/scene.json | 100ms grid ready | 216ms preview initialised | 285ms first splat frame | 524ms sd initialised, 800000 splats | 653ms splats active",
+      "seconds": 1.7
+    },
+    {
+      "id": "H2",
+      "name": "scripted 20 s walk with SD: mean fps >= 55, p95 frame <= 20 ms (vsync-capped method)",
+      "pass": true,
+      "value": "60 fps mean, p95 16.7 ms, p99 16.8 ms, max 16.8 ms over 20.8 s (1247 frames); 800000 splats",
+      "metrics": {
+        "frames": 1247,
+        "secs": 20.7826,
+        "fps_mean": 60.00211715569756,
+        "p50_ms": 16.69999999999891,
+        "p95_ms": 16.700000000000728,
+        "p99_ms": 16.80000000000109,
+        "max_ms": 16.80000000000291,
+        "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+        "splats": 800000,
+        "mb": 18.1,
+        "governor_steps": [],
+        "final_level": 0,
+        "browser": "HeadlessChrome/156.0.8078.4",
+        "mac_loadavg_1min": {
+          "before": 3.2,
+          "after": 2.7
+        },
+        "cpus": 8
+      },
+      "detail": "walk ended at {\"x\":-4.099942772482892,\"y\":1.42,\"z\":1.5486457717938475,\"yawDeg\":177.9408086650983,\"pitchDeg\":0}",
+      "seconds": 24.4
+    },
+    {
+      "id": "H3",
+      "name": "200 random 5 s walks + 16 headings x 6 s: 0 positions in blocked cells; >= 8 wall stops; >= 12 moves >= 0.5 m",
+      "pass": true,
+      "value": "0 blocked-cell samples of 28245; wall stops 16/16; moves >= 0.5 m 16/16",
+      "metrics": {
+        "walks": 200,
+        "walk_samples": 22309,
+        "walk_violations": 0,
+        "blocked_frames": 10266,
+        "pushes": 16,
+        "push_samples": 5776,
+        "push_violations": 0,
+        "stopped": 16,
+        "moved_half_metre": 16,
+        "live_samples": 160,
+        "live_violations": 0,
+        "frame_rate_distance_1s": {
+          "20": 0.9,
+          "30": 0.908,
+          "60": 0.909,
+          "144": 0.91
+        },
+        "frame_rate_spread_m": 0.01,
+        "push_detail": [
+          {
+            "heading": 0,
+            "dist": 0.64,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 22.5,
+            "dist": 0.91,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 45,
+            "dist": 1.98,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 67.5,
+            "dist": 3.87,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 90,
+            "dist": 3.55,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 112.5,
+            "dist": 2.02,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 135,
+            "dist": 1.54,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 157.5,
+            "dist": 1.24,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 180,
+            "dist": 1.26,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 202.5,
+            "dist": 2.22,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 225,
+            "dist": 2.62,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 247.5,
+            "dist": 2.52,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 270,
+            "dist": 3.8,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 292.5,
+            "dist": 1.07,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 315,
+            "dist": 0.8,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          },
+          {
+            "heading": 337.5,
+            "dist": 0.68,
+            "stoppedByWall": true,
+            "sawBlock": true,
+            "still": true
+          }
+        ]
+      },
+      "detail": "",
+      "seconds": 18.6
+    },
+    {
+      "id": "H4",
+      "name": "browser render vs undistorted photo: PSNR >= 18 dB at 3 poses and >= 3 dB above the same poses turned 10 deg",
+      "pass": true,
+      "value": "000043: 21.33 dB (rot10 10.85, +10.47); 000141: 22.84 dB (rot10 11.22, +11.62); 000241: 22.04 dB (rot10 13.75, +8.29)",
+      "metrics": {
+        "poses": [
+          {
+            "id": "000043",
+            "psnr": 21.33,
+            "psnr_rot10": 10.85,
+            "gain": 10.47
+          },
+          {
+            "id": "000141",
+            "psnr": 22.84,
+            "psnr_rot10": 11.22,
+            "gain": 11.62
+          },
+          {
+            "id": "000241",
+            "psnr": 22.04,
+            "psnr_rot10": 13.75,
+            "gain": 8.29
+          }
+        ],
+        "source": "training poses (pairs file)"
+      },
+      "seconds": 11.8
+    },
+    {
+      "id": "H4b",
+      "name": "browser render vs gsplat render of the same file: PSNR >= 25 dB (needs reference renders)",
+      "pass": null,
+      "value": "not run: no gsplat reference renders supplied (--parity DIR with parity.json)",
+      "seconds": 0
+    },
+    {
+      "id": "H5",
+      "name": "touch path moves the player under mobile emulation (left thumb walks, right thumb looks)",
+      "pass": true,
+      "value": "moved 1.34 m with the left thumb; turned 22.9 deg with the right; start button tapped: true",
+      "metrics": {
+        "moved_m": 1.336,
+        "turned_deg": 22.9,
+        "heading_deg": 67.5,
+        "viewport": "844x390 mobile, touch emulation"
+      },
+      "seconds": 5.3
+    },
+    {
+      "id": "H6",
+      "name": "?stress=1 (pixel ratio 2): the governor lowers resolution within 3 s",
+      "pass": true,
+      "value": "pixel ratio 2 -> 1.4 1835 ms after the first splat frame; settled at stress-mid (1.4)",
+      "metrics": {
+        "pr_start": 2,
+        "pr_first_step": 1.4,
+        "first_step_after_ms": 1835,
+        "settled": {
+          "pr": 1.4,
+          "level": 1,
+          "name": "stress-mid"
+        },
+        "history": [
+          {
+            "t": 2164,
+            "step": "stress-mid",
+            "pr": 1.4,
+            "why": "mean 31.3 fps < 40"
+          }
+        ]
+      },
+      "seconds": 6.5
+    },
+    {
+      "id": "H7",
+      "name": "?asset= loads the splat file from a second local origin (CORS), and falls back when that origin has no CORS",
+      "pass": true,
+      "value": "cross-origin load ok (800000 splats from 127.0.0.1:52851); no-CORS origin: fell back to own file",
+      "metrics": {
+        "cors_origin_requests": 2,
+        "console_errors": 0,
+        "fallback_urls": [
+          "http://127.0.0.1:52853/scenes/honka_demo/splat_preview.spz",
+          "http://127.0.0.1:52853/scenes/honka_demo/splat_sd.spz"
+        ],
+        "first_frame_s": 0.37
+      },
+      "detail": "",
+      "seconds": 3.3
+    },
+    {
+      "id": "H8",
+      "name": "bundle.py output validates: required keys, files present, sizes match; corrupted bundles are rejected",
+      "pass": true,
+      "value": "valid bundle: 73 checks, 0 failed, 26.3 MB; 6/6 corrupted copies rejected",
+      "metrics": {
+        "n_checks": 73,
+        "warnings": [],
+        "mutations": [
+          {
+            "name": "missing_key",
+            "rejected": true,
+            "first_error": "honka_demo: key spawn: missing"
+          },
+          {
+            "name": "bytes_mismatch",
+            "rejected": true,
+            "first_error": "honka_demo: sd bytes match: file 15549881 vs scene.json 15549781"
+          },
+          {
+            "name": "grid_missing",
+            "rejected": true,
+            "first_error": "honka_demo: grid.png: missing"
+          },
+          {
+            "name": "wrong_count",
+            "rejected": true,
+            "first_error": "honka_demo: sd count matches SPZ header: header 800000 vs scene.json 800001"
+          },
+          {
+            "name": "grid_dims",
+            "rejected": true,
+            "first_error": "honka_demo: grid dims match: png 271x247 vs 272x247"
+          },
+          {
+            "name": "heldout_photo_missing",
+            "rejected": true,
+            "first_error": "honka_demo: heldout 000000 photo: missing /var/folders/l8/2gfpvm6j1cjg5ln304gxrsjw0000gn/T/ns-h8-izsi52/heldout_photo_missing/scenes/honka_demo/heldout/000000.jpg"
+          }
+        ],
+        "total_bytes": 26264623
+      },
+      "seconds": 0.9
+    },
+    {
+      "id": "H9",
+      "name": "20 Mbps link: SD fully loaded within 18 s; preview first frame within 4 s",
+      "pass": true,
+      "value": "first frame 2.35 s (preview); SD loaded 8.65 s at 20 Mbps (15.5 MB)",
+      "metrics": {
+        "first_frame_s": 2.35,
+        "sd_loaded_s": 8.65,
+        "link_mbps": 20,
+        "sd_mb": 15.55,
+        "has_preview": true,
+        "wall_s": 8.7
+      },
+      "seconds": 9.4
+    },
+    {
+      "id": "X1",
+      "name": "WebGL2-missing card shows (and links to the video when configured)",
+      "pass": true,
+      "value": "error=webgl2-missing, card shown=true",
+      "seconds": 0.4
+    },
+    {
+      "id": "X2",
+      "name": "keys: R respawns, H toggles the stats panel, M cycles the map, ? toggles help, Esc closes it",
+      "pass": true,
+      "value": "R:ok H:ok M:ok help:ok",
+      "metrics": {
+        "R": true,
+        "H": true,
+        "M": true,
+        "help": true
+      },
+      "seconds": 2.7
+    },
+    {
+      "id": "X3",
+      "name": "tour benchmark (T / ?bench=1) completes and reports avg fps, p95, splats, MB, GPU",
+      "pass": true,
+      "value": "avg 60 fps, p95 16.8 ms, 800000 splats, 18.1 MB, ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+      "metrics": {
+        "avg_fps": 60,
+        "p50_ms": 16.7,
+        "p95_ms": 16.8,
+        "p99_ms": 16.8,
+        "max_ms": 16.8,
+        "frames": 721,
+        "secs": 12,
+        "splats": 800000,
+        "mb": 18.1,
+        "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+        "software": false,
+        "quality": "sd",
+        "pixel_ratio": 1,
+        "max_std_dev": 2.236,
+        "viewport": "1280x720",
+        "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+        "scene": "honka_demo",
+        "when": "2026-10-29T23:01:22.418Z"
+      },
+      "seconds": 14
+    },
+    {
+      "id": "X4",
+      "name": "reality check (C): opens over held-out pairs, slider and arrow keys work, Esc returns",
+      "pass": true,
+      "value": "8 pairs; mode reality; slider clip inset(0px 50% 0px 0px) -> inset(0px 80% 0px 0px); right arrow -> photo 2; Esc -> play; caption \"Held-out photo 1 of 8  (never seen in training)\"",
+      "seconds": 4.7
+    },
+    {
+      "id": "X5",
+      "name": "bookmarks 1-5 jump to their saved views",
+      "pass": true,
+      "value": "1: 0 m, 2: 0 m, 3: 0 m, 4: 0 m, 5: 0 m",
+      "metrics": {
+        "rows": [
+          {
+            "n": 1,
+            "err_m": 0
+          },
+          {
+            "n": 2,
+            "err_m": 0
+          },
+          {
+            "n": 3,
+            "err_m": 0
+          },
+          {
+            "n": 4,
+            "err_m": 0
+          },
+          {
+            "n": 5,
+            "err_m": 0
+          }
+        ]
+      },
+      "seconds": 2.4
+    },
+    {
+      "id": "X6",
+      "name": "URL flags: ?pose= sets the start pose, ?keys=1 shows the key overlay, ?q=low starts at the low preset",
+      "pass": true,
+      "value": "pose {\"x\":-0.499,\"y\":1.3,\"z\":1.387,\"yawDeg\":33,\"pitchDeg\":-10}; key overlay true, lit 1; governor low; splats preview",
+      "seconds": 1.3
+    },
+    {
+      "id": "X7",
+      "name": "minimap: view cone and arrow drawn; clicking teleports to the nearest walkable cell",
+      "pass": true,
+      "value": "minimap image drawn (1113 warm pixels); teleported 6.6 m; landing error 0.07 m",
+      "seconds": 1.7
+    },
+    {
+      "id": "X8",
+      "name": "HD button swaps in splat_hd (a scene without one gets the SD file standing in for HD, to test the mechanism)",
+      "pass": true,
+      "value": "HD button shown true; HD active with 800000 splats, then back to SD (mechanism test, SD file as HD)",
+      "metrics": {
+        "stand_in": true
+      },
+      "seconds": 1.6
+    },
+    {
+      "id": "X9",
+      "name": "?scene=<name> loads that scene; an unknown scene shows the error card instead of a blank page",
+      "pass": true,
+      "value": "known scene ok (title \"Honka room (test fixture) · Namma Space\"); unknown scene -> error card true (Could not load the scene: http://127.0.0.1:54518/scenes/does_not_exist/scene.json: HTTP 404)",
+      "seconds": 0.8
+    },
+    {
+      "id": "X10",
+      "name": "fly mode (F) passes furniture but stays inside the room bounds",
+      "pass": true,
+      "value": "fly on: true; samples outside bounds 0; samples past furniture/walls 2637",
+      "seconds": 1.2
+    },
+    {
+      "id": "X11",
+      "name": "weak-GPU fallback: the last governor step swaps to the 200 k-splat preview, and steps back up to SD",
+      "pass": true,
+      "value": "ladder standard > low > min > preview; sd 800000 -> preview 150000 -> sd 800000",
+      "seconds": 3.6
+    },
+    {
+      "id": "X12",
+      "name": "L copies a spot link; opening it puts the player at the same pose",
+      "pass": true,
+      "value": "/index.html?scene=honka_demo&pose=-0.4,1.42,1.39,77,-8 -> yaw 77.0, pitch -8.0",
+      "seconds": 1.6
+    }
+  ],
+  "viewer": {
+    "devices": [
+      {
+        "name": "MacBook (Apple M1), headless Chrome, ANGLE Metal, 1280x720, pixel ratio 1",
+        "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+        "browser": "HeadlessChrome/156.0.8078.4",
+        "first_frame_s": 0.396,
+        "fps_mean": 60,
+        "p95_ms": 16.7,
+        "mb": 18.1,
+        "splats": 800000,
+        "source": "H2 scripted 20 s walk"
+      },
+      {
+        "name": "same machine, tour benchmark (T)",
+        "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+        "browser": "HeadlessChrome/156.0.8078.4",
+        "first_frame_s": 0.396,
+        "fps_mean": 60,
+        "p95_ms": 16.8,
+        "mb": 18.1,
+        "splats": 800000,
+        "source": "X3 benchmark (compressed to 12 s)"
+      }
+    ]
+  },
+  "walls": {
+    "walks": 200,
+    "pushes": 16,
+    "penetrations": 0,
+    "wall_stops": 16
+  }
+}

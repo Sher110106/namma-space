@@ -1,0 +1,77 @@
+[
+ {
+  "id": "000043",
+  "photo": "000043.jpg",
+  "position": [
+   -0.063,
+   1.0928,
+   2.1453
+  ],
+  "quaternion": [
+   -0.1123708,
+   -0.4517218,
+   -0.0792929,
+   0.8814947
+  ],
+  "fov_y_deg": 62.8266,
+  "principal_point": [
+   0.5,
+   0.5
+  ],
+  "aspect": 0.74242,
+  "width": 735,
+  "height": 990,
+  "psnr": 0,
+  "image_name": "frame_00047.jpg"
+ },
+ {
+  "id": "000141",
+  "photo": "000141.jpg",
+  "position": [
+   2.7696,
+   1.4575,
+   -0.4886
+  ],
+  "quaternion": [
+   -0.0121394,
+   -0.5918943,
+   -0.0459223,
+   0.8046148
+  ],
+  "fov_y_deg": 62.8266,
+  "principal_point": [
+   0.5,
+   0.5
+  ],
+  "aspect": 0.74242,
+  "width": 735,
+  "height": 990,
+  "psnr": 0,
+  "image_name": "frame_00183.jpg"
+ },
+ {
+  "id": "000241",
+  "photo": "000241.jpg",
+  "position": [
+   1.4324,
+   1.3046,
+   1.0353
+  ],
+  "quaternion": [
+   -0.0735195,
+   0.7345036,
+   0.1080757,
+   0.6658971
+  ],
+  "fov_y_deg": 62.8266,
+  "principal_point": [
+   0.5,
+   0.5
+  ],
+  "aspect": 0.74242,
+  "width": 735,
+  "height": 990,
+  "psnr": 0,
+  "image_name": "frame_00283.jpg"
+ }
+]

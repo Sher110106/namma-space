@@ -1,0 +1,12 @@
+{
+  "web": "/Users/sher/project/namma-space/viewer/dist",
+  "ok": true,
+  "n_checks": 73,
+  "n_failed": 0,
+  "errors": [],
+  "warnings": [],
+  "total_bytes": 26264623,
+  "scenes": [
+    "honka_demo"
+  ]
+}

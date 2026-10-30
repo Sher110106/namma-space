@@ -1,0 +1,37 @@
+{
+ "T_final": {
+  "position": [
+   0.771167,
+   0.790705,
+   -0.644755
+  ],
+  "quaternion": [
+   -0.6900632,
+   0.0,
+   0.0433772,
+   0.722448
+  ],
+  "scale": 2.505764,
+  "note": "trainer frame (gsplat normalised) to metric y-up floor-at-0; scale assumed from camera height"
+ },
+ "sd": {
+  "count": 800000,
+  "mb": 15.55,
+  "sh": 1,
+  "psnr": null
+ },
+ "preview": {
+  "count": 150000,
+  "mb": 2.55,
+  "sh": 0,
+  "psnr": null
+ },
+ "removed": {},
+ "cmd": "viewer/tools/fixture/make_fixture.py (top-N by opacity x volume, SH truncation) then viewer/tools/fixture/spz_transcode.mjs (Spark 2.4.0 transcodeSpz, SPZ v3, 12 fractional bits)",
+ "render": {
+  "antialiased": false,
+  "preBlurAmount": 0.3,
+  "blurAmount": 0.0,
+  "maxStdDev": 2.828
+ }
+}

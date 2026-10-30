@@ -1,0 +1,16 @@
+{
+ "variants": [
+  {
+   "name": "smoke_honka_mcmc30k_bilagrid",
+   "psnr": 20.62,
+   "ssim": 0.807,
+   "lpips": 0.242,
+   "cc_psnr": 23.96,
+   "n_gs": 1000000,
+   "time_s": 1080,
+   "peak_gpu_gb": null
+  }
+ ],
+ "chosen": "smoke_honka_mcmc30k_bilagrid",
+ "why": "only variant (fixture)"
+}

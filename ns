@@ -1,0 +1,1171 @@
+#!/usr/bin/env python3
+"""ns: the Namma Space command line (Mac, Python 3 standard library only).
+
+    ./ns doctor                       ssh, disk, free GPU memory, image digests, Mac tools, timed 100 MB copy
+    ./ns sync [subdir]                rsync the code to tyrone (never --delete)
+    ./ns check <video> [video...]     preflight on the Mac (pipeline/ingest/check_mac.py)
+    ./ns run <video> --name N [--height CM] [--measure what=metres[:method]] [--quick] [--from STAGE] [--to STAGE]
+    ./ns run --frames DIR --name N    same, from a folder of photos
+    ./ns run --name N --from train    resume: nothing is uploaded again, finished stages are skipped
+    ./ns status <name>                stage table of a run on tyrone
+    ./ns pull <name> [--light|--all]  copy results back to runs/<name>/ (big intermediates excluded)
+    ./ns bundle|verify|report <name>  Mac-side steps after a pull
+    ./ns serve <name> [--port 5178]   http://127.0.0.1:5178/?scene=<name> from runs/<name>/80_web
+    ./ns rescale <name> [--scale K | --use-measures]   new T_final, rebuilt grid and bundle, no retraining
+    ./ns package <name>               assemble the Drive folder contents under runs/<name>/package/
+    ./ns publish <name>               dry run: lists what would go public. --execute asks for a typed phrase
+    ./ns test <pkg|e2e|all> [--remote] run a package's tests (test/unit/<pkg>/ or test/e2e/)
+
+Environment: NS_HOST (default sher@10.1.18.190), NS_REMOTE_ROOT (default /home/sher/namma-space),
+NS_LOCAL_RUNS (default ./runs).
+Stage runs live on tyrone under runs/<name>/ and survive an ssh drop; `ns run` only polls them.
+Exit codes follow CONTRACTS 2.11: 0 good, 10 capture problem, 11 partial, 20 infrastructure, 30 gate failed.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import glob
+import hashlib
+import http.server
+import json
+import os
+import re
+import shlex
+import shutil
+import socketserver
+import subprocess
+import sys
+import tempfile
+import time
+import zipfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent
+sys.path.insert(0, str(REPO))
+
+HOST = os.environ.get("NS_HOST", "sher@10.1.18.190")
+RROOT = os.environ.get("NS_REMOTE_ROOT", "/home/sher/namma-space")
+LOCAL_RUNS = Path(os.environ.get("NS_LOCAL_RUNS", str(REPO / "runs")))
+RUN_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,40}$")
+SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15",
+            "-o", "ServerAliveCountMax=3"]
+STAGES = ["ingest", "sfm", "align", "train", "geometry", "export", "grid"]
+SYNC_EXCLUDES = [".git", "node_modules", "runs", "inbox", "__pycache__", "*.pyc", ".DS_Store", "viewer/dist/scenes"]
+PORT = 5178
+END_STATES = ("done", "partial", "review", "failed", "stopped")  # final values of status.json "state"
+
+
+# ------------------------------------------------------------------ small helpers
+
+def say(msg: str = "") -> None:
+    print(msg, flush=True)
+
+
+def stamp() -> str:
+    return dt.datetime.now().strftime("%H:%M:%S")
+
+
+def die(msg: str, code: int = 2) -> None:
+    print(f"ns: {msg}", file=sys.stderr, flush=True)
+    sys.exit(code)
+
+
+def valid_name(name: str) -> str:
+    if not RUN_NAME_RE.match(name):
+        die(f"run name {name!r} must match {RUN_NAME_RE.pattern} (lowercase letters, digits, - _ .)")
+    return name
+
+
+def ssh(cmd: str, timeout: float = 60, stdin=None, text: bool = True) -> subprocess.CompletedProcess:
+    """Run a shell command on tyrone. Never raises on a non-zero exit; returns 255 on ssh trouble."""
+    try:
+        return subprocess.run(["ssh", *SSH_OPTS, HOST, cmd], capture_output=True, text=text, timeout=timeout,
+                              stdin=stdin)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 255, "", "ssh timed out")
+
+
+def rsync(args: list, quiet: bool = False) -> int:
+    cmd = ["rsync", "-a", "-e", "ssh " + " ".join(SSH_OPTS), *args]
+    if quiet:
+        return subprocess.run(cmd, capture_output=True).returncode
+    return subprocess.run(cmd).returncode
+
+
+def free_gb(path: Path) -> float:
+    p = path
+    while not p.exists() and p != p.parent:
+        p = p.parent
+    return shutil.disk_usage(p).free / 1e9
+
+
+def git_sha() -> str:
+    try:
+        sha = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], capture_output=True,
+                             text=True).stdout.strip()
+        if not sha:
+            return "nocommit"
+        dirty = subprocess.run(["git", "-C", str(REPO), "status", "--porcelain"], capture_output=True,
+                               text=True).stdout.strip()
+        return sha + ("-dirty" if dirty else "")
+    except OSError:
+        return "nogit"
+
+
+def remote_run(name: str) -> str:
+    return f"{RROOT}/runs/{name}"
+
+
+def local_run(name: str) -> Path:
+    return LOCAL_RUNS / name
+
+
+# ------------------------------------------------------------------ sync
+
+def sync_code(subdir: str = "", quiet: bool = False) -> int:
+    src = REPO / subdir if subdir else REPO
+    if not src.exists():
+        die(f"{src} does not exist")
+    dst = f"{HOST}:{RROOT}/repo/{subdir + '/' if subdir else ''}"
+    args = []
+    for e in SYNC_EXCLUDES:
+        args += ["--exclude", e]
+    rc = rsync([*args, str(src) + "/", dst], quiet=quiet)
+    if rc != 0:
+        say(f"ns: rsync failed (exit {rc})")
+    return rc
+
+
+def cmd_sync(a) -> int:
+    t0 = time.time()
+    rc = sync_code(a.subdir or "")
+    say(f"sync {'ok' if rc == 0 else 'FAILED'} in {time.time() - t0:.1f}s -> {HOST}:{RROOT}/repo/")
+    return 0 if rc == 0 else 20
+
+
+# ------------------------------------------------------------------ doctor
+
+class Report:
+    def __init__(self) -> None:
+        self.fails = 0
+        self.warns = 0
+
+    def line(self, level: str, what: str, detail: str = "") -> None:
+        if level == "FAIL":
+            self.fails += 1
+        if level == "WARN":
+            self.warns += 1
+        say(f"  {level:<4}  {what:<22} {detail}")
+
+
+def cmd_doctor(a) -> int:
+    t_start = time.time()
+    r = Report()
+    say(f"ns doctor  ({HOST}, {RROOT})")
+    say("tyrone")
+    t0 = time.time()
+    probe = ssh("true", timeout=15)
+    rtt = time.time() - t0
+    if probe.returncode != 0:
+        r.line("FAIL", "ssh", f"cannot connect: {probe.stderr.strip()[:120]}")
+        say(f"doctor stopped: no ssh ({time.time() - t_start:.1f}s)")
+        return 1
+    r.line("PASS" if rtt < 3 else "WARN", "ssh", f"connected in {rtt:.2f}s")
+
+    script = f"""
+cd {RROOT} 2>/dev/null || {{ echo "ERR root missing"; exit 0; }}
+echo "DF $(df --output=avail -BG / | tail -1 | tr -dc 0-9)"
+echo "GPU $(nvidia-smi --query-gpu=name,memory.used,memory.total,memory.free --format=csv,noheader,nounits 2>&1 | head -1)"
+echo "MEM $(free -g | awk '/Mem:/ {{print $7}}')"
+echo "PY $(python3 --version 2>&1)"
+for i in namma-colmap:0.1 namma-colmap:0.2 namma-space-gpu:0.1 namma-space-gpu:0.2 namma-node:0.1; do
+  d=$(docker image inspect --format '{{{{.Id}}}} {{{{.Size}}}}' $i 2>/dev/null) && echo "IMG $i $d" || echo "IMG $i missing"
+done
+echo "OURS $(docker ps --format '{{{{.Names}}}}' | grep -c '^ns-')"
+echo "OTHERS $(docker ps --format '{{{{.Names}}}}' | grep -vc '^ns-')"
+echo "NSDOCKER $(test -x bin/nsdocker && echo ok || echo missing)"
+echo "RUNNER $(test -f repo/pipeline/remote/ns_remote.py && echo ok || echo missing)"
+echo "LOCKS $(ls locks 2>/dev/null | tr '\\n' ' ')"
+echo "RUNS $(du -sm runs 2>/dev/null | cut -f1)"
+"""
+    res = ssh(script, timeout=40)
+    info: dict = {}
+    imgs = []
+    for ln in res.stdout.splitlines():
+        k, _, v = ln.partition(" ")
+        if k == "IMG":
+            imgs.append(v)
+        else:
+            info[k] = v
+    if "ERR" in info:
+        r.line("FAIL", "layout", f"{RROOT} missing on tyrone")
+    free = float(info.get("DF") or 0)
+    r.line("PASS" if free >= 25 else ("WARN" if free >= 15 else "FAIL"), "disk free (tyrone)",
+           f"{free:.0f} GB (floor 15 GB; budget 6 GB per run)")
+    gpu = (info.get("GPU") or "").split(",")
+    if len(gpu) >= 4:
+        gfree = float(gpu[3])
+        r.line("PASS" if gfree >= 12000 else "WARN", "GPU memory free",
+               f"{gfree / 1024:.1f} GB free of {float(gpu[2]) / 1024:.0f} GB ({gpu[0].strip()}); a GPU job needs 12 GB")
+    else:
+        r.line("FAIL", "GPU", info.get("GPU", "nvidia-smi gave nothing")[:100])
+    r.line("PASS" if float(info.get("MEM") or 0) >= 25 else "WARN", "RAM available", f"{info.get('MEM', '?')} GB")
+    r.line("PASS" if info.get("PY", "").startswith("Python 3") else "FAIL", "python3 (host)", info.get("PY", ""))
+    for im in imgs:
+        parts = im.split()
+        if len(parts) >= 3 and parts[1] != "missing":
+            digest = parts[1].replace("sha256:", "")[:12]
+            r.line("PASS", parts[0], f"sha256:{digest}  {int(parts[2]) / 1e9:.1f} GB")
+        else:
+            lvl = "FAIL" if parts[0] in ("namma-colmap:0.2", "namma-space-gpu:0.1") else "WARN"
+            r.line(lvl, parts[0], "not present on tyrone")
+    r.line("PASS", "our containers", f"{info.get('OURS', '?')} running (cap 3); others: {info.get('OTHERS', '?')} (never touched)")
+    r.line("PASS" if info.get("NSDOCKER") == "ok" else "FAIL", "bin/nsdocker", info.get("NSDOCKER", "?"))
+    r.line("PASS" if info.get("RUNNER") == "ok" else "WARN", "repo/ns_remote.py",
+           info.get("RUNNER", "?") + ("" if info.get("RUNNER") == "ok" else "  (run ./ns sync)"))
+    r.line("PASS", "runs/ size", f"{info.get('RUNS', '?')} MB; locks: {info.get('LOCKS', '').strip() or 'none'}")
+
+    say("Mac")
+    for tool in ("ffmpeg", "ffprobe", "node", "rsync", "python3", "caffeinate"):
+        p = shutil.which(tool)
+        if not p:
+            r.line("FAIL" if tool in ("ffmpeg", "ffprobe", "rsync", "python3") else "WARN", tool, "not found")
+            continue
+        ver = ""
+        if tool in ("ffmpeg", "node", "python3"):
+            flag = "-version" if tool == "ffmpeg" else "--version"
+            ver = subprocess.run([tool, flag], capture_output=True, text=True).stdout.splitlines()[:1]
+            ver = ver[0][:60] if ver else ""
+        r.line("PASS", tool, ver or p)
+    chrome = glob.glob(os.path.expanduser("~/Library/Caches/ms-playwright/chromium_headless_shell*/*/chrome-headless-shell"))
+    r.line("PASS" if chrome else "WARN", "headless chrome", "found" if chrome else "playwright chromium_headless_shell missing")
+    mfree = free_gb(REPO)
+    r.line("PASS" if mfree >= 10 else ("WARN" if mfree >= 3 else "FAIL"), "disk free (Mac)",
+           f"{mfree:.1f} GB at {REPO}" + ("" if mfree >= 10 else "  (pulls and zips need room; free some space)"))
+
+    say("copy test (100 MB each way)")
+    mb = 100
+    rpath = f"{RROOT}/runs/rh-doctor.bin"
+    chunk = os.urandom(1 << 20)
+    t0 = time.time()
+    p = subprocess.Popen(["ssh", *SSH_OPTS, HOST, f"cat > {rpath}"], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        for _ in range(mb):
+            p.stdin.write(chunk)
+        p.stdin.close()
+        p.wait(timeout=90)
+        up = time.time() - t0
+        r.line("PASS" if up < 30 else "WARN", "upload", f"{mb / up:.1f} MB/s ({up:.1f}s for {mb} MB)")
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        p.kill()
+        r.line("FAIL", "upload", str(exc)[:100])
+        up = 99
+    if up < 40:
+        t0 = time.time()
+        d = subprocess.Popen(["ssh", *SSH_OPTS, HOST, f"cat {rpath}"], stdout=subprocess.PIPE)
+        got = 0
+        while True:
+            b = d.stdout.read(1 << 20)
+            if not b:
+                break
+            got += len(b)
+        d.wait()
+        down = time.time() - t0
+        ok = got == mb * (1 << 20)
+        r.line("PASS" if ok and down < 30 else "WARN", "download", f"{got / 1e6 / max(down, 1e-6):.1f} MB/s ({down:.1f}s)"
+               + ("" if ok else f"  short read {got}"))
+    ssh(f"rm -f {rpath}", timeout=15)
+
+    total = time.time() - t_start
+    say(f"doctor: {r.fails} FAIL, {r.warns} WARN, {total:.0f}s" + ("" if total <= 60 else "  (over the 60 s target)"))
+    return 1 if r.fails else 0
+
+
+# ------------------------------------------------------------------ check
+
+def cmd_check(a) -> int:
+    script = REPO / "pipeline" / "ingest" / "check_mac.py"
+    if not script.exists():
+        die("pipeline/ingest/check_mac.py is not present yet (W2 builds it); nothing to check")
+    cmd = [sys.executable, str(script), *a.videos]
+    if a.name:
+        cmd += ["--run-dir", str(local_run(valid_name(a.name)))]
+    else:
+        cmd += ["--out", ""]
+    return subprocess.run(cmd).returncode
+
+
+# ------------------------------------------------------------------ pull
+
+LIGHT_FILTER = ["--exclude=*.tmp", "--exclude=*.prev", "--exclude=*.failed", "--exclude=.runner.lock",
+                "--include=*/", "--include=*.json", "--include=*.txt", "--include=logs/***", "--include=figures/***",
+                "--include=*.md", "--exclude=*"]
+FULL_EXCLUDES = ["input/", "*.db", "30_undist/images/", "40_align/images", "10_frames/images/", "50_train/*/ply/",
+                 "50_train/*/ckpts/", "50_train/*/renders/", "*.tmp", "*.prev", "*.failed", ".runner.lock", "20_sfm/*/sparse/"]
+
+
+def pull_args(a, name: str, light: bool) -> list:
+    dst = local_run(name)
+    src = f"{HOST}:{remote_run(name)}/"
+    if light:
+        return [*LIGHT_FILTER, src, str(dst) + "/"]
+    ex = list(FULL_EXCLUDES)
+    if getattr(a, "with_frames", False) or getattr(a, "all", False):
+        ex = [e for e in ex if e != "10_frames/images/"]
+    if getattr(a, "with_ply", False) or getattr(a, "all", False):
+        ex = [e for e in ex if e not in ("50_train/*/ply/", "50_train/*/ckpts/", "50_train/*/renders/")]
+    if getattr(a, "all", False):
+        ex = [e for e in ex if e in ("*.tmp", "*.prev", "*.failed", ".runner.lock")]
+    args = []
+    for e in ex:
+        args += ["--exclude", e]
+    return args + [src, str(dst) + "/"]
+
+
+def cmd_pull(a, name: str | None = None, light: bool | None = None) -> int:
+    name = valid_name(name or a.name)
+    light = a.light if light is None else light
+    dst = local_run(name)
+    dst.mkdir(parents=True, exist_ok=True)
+    args = pull_args(a, name, light)
+    # size the transfer first: the Mac disk can be nearly full
+    dry = subprocess.run(["rsync", "-a", "--dry-run", "--stats", "-e", "ssh " + " ".join(SSH_OPTS), *args],
+                         capture_output=True, text=True)
+    m = re.search(r"total size is (\d+)", dry.stdout + dry.stderr)
+    need_gb = (int(m.group(1)) / 1e9 if m else 0.0) + 0.1
+    if dry.returncode != 0:
+        say(f"ns: cannot list runs/{name} on tyrone (rsync exit {dry.returncode}): {dry.stderr.strip()[:150]}")
+        return 20
+    if free_gb(dst) < need_gb and not getattr(a, "force", False):
+        say(f"ns: pull of {name} needs about {need_gb:.2f} GB but the Mac has {free_gb(dst):.2f} GB free. "
+            "Free some space, or use --light, or --force.")
+        return 20
+    t0 = time.time()
+    rc = rsync(args)
+    if rc != 0:
+        say(f"ns: pull failed (rsync exit {rc})")
+        return 20
+    for stale in dst.glob("*.tmp"):  # half-written stage dirs from an earlier light pull
+        shutil.rmtree(stale, ignore_errors=True)
+    say(f"pulled {name} ({'light' if light else 'full'}, {need_gb - 0.1:.2f} GB) in {time.time() - t0:.1f}s -> {dst}")
+    return 0
+
+
+# ------------------------------------------------------------------ run
+
+def parse_measures(items: list) -> list:
+    out = []
+    for it in items or []:
+        m = re.match(r"^([A-Za-z_ ]+)=([0-9.]+)(?::(.+))?$", it)
+        if not m:
+            die(f"--measure needs what=metres[:method], got {it!r}")
+        out.append({"what": m.group(1).strip(), "metres": float(m.group(2)), "method": m.group(3) or "tape"})
+    return out
+
+
+def read_status(name: str) -> dict | None:
+    res = ssh(f"cat {remote_run(name)}/status.json", timeout=25)
+    if res.returncode == 255:
+        return None  # ssh trouble
+    if res.returncode != 0:
+        return {"state": "none"}
+    try:
+        return json.loads(res.stdout)
+    except json.JSONDecodeError:
+        return {"state": "unreadable"}
+
+
+def build_runner_flags(a) -> list:
+    flags = []
+    if a.from_stage:
+        flags += ["--from", a.from_stage]
+    if a.to:
+        flags += ["--to", a.to]
+    if a.quick:
+        flags += ["--quick"]
+    for o in a.opt or []:
+        flags += ["--opt", o]
+    for rf in a.runner_flag or []:
+        flags += shlex.split(rf)
+    return flags
+
+
+def launch_remote(name: str, flags: list) -> int | None:
+    """Start ns_remote.py under nohup on tyrone. Returns the pid, 0 when one is already running, None on ssh failure."""
+    rd = remote_run(name)
+    cmd = f"""
+mkdir -p {rd}/logs
+if ! flock -n {rd}/.runner.lock true 2>/dev/null; then echo ATTACH; exit 0; fi
+cd {RROOT}/repo
+nohup python3 pipeline/remote/ns_remote.py {shlex.quote(name)} --git {shlex.quote(git_sha())} {' '.join(shlex.quote(f) for f in flags)} \
+  >> {rd}/logs/runner.log 2>&1 < /dev/null &
+echo PID $!
+"""
+    res = ssh(cmd, timeout=30)
+    if res.returncode != 0:
+        return None
+    if "ATTACH" in res.stdout:
+        return 0
+    m = re.search(r"PID (\d+)", res.stdout)
+    return int(m.group(1)) if m else None
+
+
+def print_stage_changes(name: str, st: dict, seen: dict) -> list:
+    """Print new stage states; return names of stages that just finished."""
+    finished = []
+    for s, v in (st.get("stages") or {}).items():
+        key = (v.get("state"), v.get("exit"))
+        if seen.get(s) == key:
+            continue
+        seen[s] = key
+        state = v.get("state", "?")
+        extra = ""
+        if state == "done" or state.startswith("exit-"):
+            extra = f" {v.get('seconds', '?')}s"
+            finished.append(s)
+        if state.startswith("skipped"):
+            extra = f" ({v.get('note', '')})" if v.get("note") else ""
+        elif v.get("note") and state != "done":
+            extra += f" ({v['note']})"
+        say(f"[{stamp()}] {name}: {s}: {state}{extra}")
+    return finished
+
+
+def remote_alive(pid: int) -> bool | None:
+    """True/False from kill -0 on tyrone; None when ssh fails."""
+    res = ssh(f"kill -0 {int(pid)} 2>/dev/null && echo alive || echo gone", timeout=20)
+    if res.returncode == 255:
+        return None
+    return "alive" in res.stdout
+
+
+def poll_runs(names: dict, light_pull: bool = True, max_ssh_fail_s: float = 1800) -> dict:
+    """names: {name: pid-or-0}. Poll status.json until every run has ended. Returns {name: exit code}.
+
+    A runner that died without writing a final status (kill -9, host reboot) is detected with kill -0
+    and reported as exit 20, so the poll never hangs.
+    """
+    results: dict = {}
+    seen = {n: {} for n in names}
+    last_alive_check = {n: 0.0 for n in names}
+    waited_start = {n: time.time() for n in names}
+    fail_since: float | None = None
+    delay = 2.0
+    while len(results) < len(names):
+        for n, pid in names.items():
+            if n in results:
+                continue
+            st = read_status(n)
+            if st is None:
+                fail_since = fail_since or time.time()
+                waited = time.time() - fail_since
+                say(f"[{stamp()}] ssh unreachable for {waited:.0f}s; the run keeps going on tyrone. Retrying...")
+                if waited > max_ssh_fail_s:
+                    say(f"ns: giving up on polling {n}. Later: ./ns status {n} ; ./ns pull {n}")
+                    results[n] = 20
+                continue
+            fail_since = None
+            state = st.get("state")
+            ours = (not pid) or st.get("pid") == pid
+            if ours:
+                finished = print_stage_changes(n, st, seen[n])
+                if finished and light_pull:
+                    cmd_pull(argparse.Namespace(name=n, light=True, force=False), n, light=True)
+                if state in END_STATES:
+                    results[n] = int(st["exit"]) if st.get("exit") is not None else 20
+                    continue
+            # stale status of an older run, or a running status whose runner may be gone
+            target = pid or st.get("pid")
+            if target and time.time() - last_alive_check[n] > 20 and (not ours or state in ("running", "starting")):
+                last_alive_check[n] = time.time()
+                alive = remote_alive(target)
+                if alive is False and (not ours or state in ("running", "starting")):
+                    if time.time() - waited_start[n] > 10:
+                        say(f"ns: the runner (pid {target}) for {n} is gone without a final status. "
+                            f"See runs/{n}/logs/runner.log. Resume with: ./ns run --name {n} --from <stage>")
+                        tail = ssh(f"tail -n 8 {remote_run(n)}/logs/runner.log", timeout=20).stdout
+                        say(textwrap_indent(tail))
+                        results[n] = 20
+        if len(results) < len(names):
+            time.sleep(delay)
+            delay = min(5.0, delay + 0.5)
+    return results
+
+
+def cmd_run(a) -> int:
+    name = valid_name(a.name)
+    names = [name] + ([valid_name(name + "-b")] if a.take_b else [])
+    if a.video and a.frames:
+        die("give a video or --frames, not both")
+    resume_only = not a.video and not a.frames
+    caff = None
+    try:
+        if shutil.which("caffeinate"):
+            caff = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
+    except OSError:
+        caff = None
+
+    uploads = []  # (run name, source Path, kind)
+    if a.video:
+        v = Path(a.video).expanduser()
+        if not v.is_file():
+            die(f"no such video: {v}")
+        uploads.append((name, v, "video"))
+    if a.frames:
+        f = Path(a.frames).expanduser()
+        if not f.is_dir():
+            die(f"no such frames directory: {f}")
+        uploads.append((name, f, "frames"))
+        n_img = sum(1 for x in f.iterdir() if x.suffix.lower() in (".jpg", ".jpeg", ".png"))
+        if n_img < 60 and not any(o.startswith("ingest:") for o in a.opt):
+            say(f"ns: {n_img} images is below the 60 that ingest wants; it will exit 10. "
+                "For a tiny test set add: --opt ingest:--force")
+    if a.take_b:
+        vb = Path(a.take_b).expanduser()
+        if not vb.is_file():
+            die(f"no such video: {vb}")
+        uploads.append((name + "-b", vb, "video"))
+
+    if not resume_only:
+        for n, src, kind in uploads:
+            lr = local_run(n)
+            lr.mkdir(parents=True, exist_ok=True)
+            meta = {"name": n, "height_cm": a.height, "measures": parse_measures(a.measure), "notes": a.note or "",
+                    "provenance": {k: v for k, v in (("kind", a.kind), ("license", a.license), ("attribution", a.attribution),
+                                                     ("source", a.source), ("title", a.title)) if v},
+                    "takes": [{"id": "B" if n.endswith("-b") else "A", "kind": kind,
+                               "file": src.name if kind == "video" else None,
+                               "frames_dir": "frames" if kind == "frames" else None}],
+                    "files": ([{"name": src.name, "bytes": src.stat().st_size}] if kind == "video" else
+                              [{"name": "frames/", "files": sum(1 for x in src.iterdir() if x.is_file() and x.name != ".DS_Store"),
+                                "bytes": sum(x.stat().st_size for x in src.iterdir() if x.is_file())}]),
+                    "created": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
+            (lr / "input").mkdir(exist_ok=True)
+            (lr / "input" / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+            if kind == "video" and not a.no_check:
+                chk = REPO / "pipeline" / "ingest" / "check_mac.py"
+                if chk.exists():
+                    say(f"[{stamp()}] preflight check on {src.name}")
+                    rc = subprocess.run([sys.executable, str(chk), str(src), "--run-dir", str(lr)]).returncode
+                    if rc == 10 and not a.force:
+                        say("ns: the check says FAIL (capture problem). Fix it, reshoot, or pass --force to try anyway.")
+                        return 10
+                else:
+                    say("ns: pipeline/ingest/check_mac.py not present; skipping the preflight check")
+
+    if not a.no_sync:
+        say(f"[{stamp()}] sync code to tyrone")
+        if sync_code(quiet=True) != 0:
+            say("ns: code sync failed; is ssh up? (./ns doctor)")
+            return 20
+
+    for n, src, kind in uploads:
+        rd = remote_run(n)
+        res = ssh(f"mkdir -p {rd}/input", timeout=30)
+        if res.returncode != 0:
+            say(f"ns: cannot reach tyrone: {res.stderr.strip()[:120]}")
+            return 20
+        say(f"[{stamp()}] upload {src.name} -> runs/{n}/input/")
+        if kind == "video":
+            rc = rsync(["--partial", str(src), f"{HOST}:{rd}/input/"])
+        else:
+            rc = rsync(["--exclude", ".DS_Store", str(src) + "/", f"{HOST}:{rd}/input/frames/"])
+        if rc == 0:
+            rc = rsync([str(local_run(n) / "input" / "meta.json"), f"{HOST}:{rd}/input/meta.json"])
+        if rc != 0:
+            say(f"ns: upload failed (rsync exit {rc})")
+            return 20
+    if uploads and not a.from_stage:
+        for n, _, _ in uploads:
+            if "yes" in ssh(f"test -e {remote_run(n)}/10_frames/frames.json && echo yes", timeout=20).stdout:
+                say(f"ns: runs/{n} already has finished stages; they are skipped. "
+                    f"To redo from the new input use --from ingest, or pick a new --name.")
+    if a.stub_cfg:
+        for n in names:
+            ssh(f"cat > {remote_run(n)}/stub_cfg.json", timeout=20, stdin=open(a.stub_cfg))
+
+    flags = build_runner_flags(a)
+    if a.dry_run:
+        flags.append("--dry-run")
+    pids = {}
+    for n in names:
+        ex = ssh(f"test -d {remote_run(n)}/input && echo yes", timeout=20)
+        if "yes" not in (ex.stdout or "") and resume_only:
+            die(f"runs/{n} does not exist on tyrone; give a video or --frames")
+        if a.dry_run:
+            res = ssh(f"cd {RROOT}/repo && python3 pipeline/remote/ns_remote.py {shlex.quote(n)} {' '.join(shlex.quote(f) for f in flags)}",
+                      timeout=60)
+            say(res.stdout.strip() or res.stderr.strip())
+            continue
+        pid = launch_remote(n, flags)
+        if pid is None:
+            say("ns: could not start the runner on tyrone")
+            return 20
+        pids[n] = pid
+        say(f"[{stamp()}] runner for {n} {'already running; attaching' if pid == 0 else f'started (pid {pid})'}; "
+            f"it keeps going if this window closes (./ns status {n})")
+    if a.dry_run:
+        return 0
+    if a.detach:
+        return 0
+
+    try:
+        results = poll_runs(pids, light_pull=not a.no_pull)
+    except KeyboardInterrupt:
+        say(f"\nns: stopped polling. The run continues on tyrone. Later: ./ns status {name} ; ./ns pull {name}")
+        return 20
+    final = 0
+    prio = {0: 0, 11: 1, 30: 2, 10: 3, 20: 4}
+    for n in names:
+        code = results.get(n, 20)
+        say(f"[{stamp()}] {n}: remote run ended with exit {code}")
+        final = max(final, code, key=lambda c: prio.get(c, 4))
+        if a.no_pull:
+            continue
+        if cmd_pull(argparse.Namespace(name=n, light=False, force=a.force, with_frames=False, with_ply=False, all=False), n, light=False) != 0:
+            final = max(final, 20, key=lambda c: prio.get(c, 4))
+            continue
+        if code in (0, 11, 30):
+            post_pull(n)
+        elif code == 10:
+            say(f"ns: capture problem in {n}. See runs/{n}/logs/ and 10_frames/frames.json; reshoot the listed ranges.")
+        else:
+            say(f"ns: infrastructure problem in {n}. See runs/{n}/logs/runner.log and the stage log.")
+    tj = local_run(name) / "timings.json"
+    if tj.exists():
+        t = json.loads(tj.read_text())
+        say("timings: " + ", ".join(f"{k} {v:.0f}s" for k, v in (t.get("stages") or {}).items()) + f"; total {t.get('total', 0):.0f}s")
+    summary = local_run(name) / "report.html"
+    if summary.exists():
+        say(f"report: {summary}")
+        if a.open:
+            subprocess.run(["open", str(summary)])
+    if a.serve and (local_run(name) / "80_web").exists():
+        serve(name, PORT)
+    return final
+
+
+def post_pull(name: str) -> None:
+    """Mac-side steps after a pull: bundle, verify, report. Each is skipped with a message when absent."""
+    for step in (cmd_bundle_run, cmd_verify_run, cmd_report_run):
+        try:
+            step(name)
+        except SystemExit:
+            raise
+        except Exception as exc:  # a broken step must not hide the others
+            say(f"ns: {step.__name__} failed: {exc}")
+
+
+def cmd_bundle_run(name: str) -> int:
+    tool = REPO / "viewer" / "tools" / "bundle.py"
+    if not tool.exists():
+        say("bundle: viewer/tools/bundle.py not present yet (W5); skipped")
+        return 0
+    run = local_run(name)
+    cmd = [sys.executable, str(tool), "--run", str(run), "--name", name, "--out", str(run / "80_web"), "--default"]
+    prov = (json.loads((run / "input" / "meta.json").read_text()) if (run / "input" / "meta.json").exists() else {}).get("provenance", {})
+    for key, flag in (("kind", "--kind"), ("license", "--license"), ("attribution", "--attribution"),
+                      ("source", "--source"), ("title", "--title"), ("captured", "--captured")):
+        if prov.get(key):
+            cmd += [flag, str(prov[key])]
+    say(f"[{stamp()}] bundle: {' '.join(shlex.quote(c) for c in cmd[1:])}")
+    return subprocess.run(cmd).returncode
+
+
+def cmd_verify_run(name: str) -> int:
+    tool = REPO / "viewer" / "test" / "run.mjs"
+    if not tool.exists():
+        say("verify: viewer/test/run.mjs not present; skipped")
+        return 0
+    run = local_run(name)
+    if not (run / "80_web").exists():
+        say("verify: no 80_web/ to verify; skipped")
+        return 0
+    if not shutil.which("node"):
+        say("verify: node not found; skipped")
+        return 0
+    cmd = ["node", str(tool), "--web", str(run / "80_web"), "--out", str(run / "90_verify"), "--scene", name]
+    pairs = run / "60_export" / "heldout" / "pairs.json"
+    if pairs.exists():
+        cmd += ["--pairs", str(pairs)]
+    say(f"[{stamp()}] verify: {' '.join(shlex.quote(c) for c in cmd[1:])}")
+    return subprocess.run(cmd).returncode
+
+
+def cmd_report_run(name: str) -> int:
+    run = local_run(name)
+    say(f"[{stamp()}] report: runs/{name}/report.json, report.html")
+    rc = subprocess.run([sys.executable, "-m", "pipeline.report", "--run", str(run)], cwd=str(REPO)).returncode
+    return rc
+
+
+def cmd_bundle(a) -> int:
+    return cmd_bundle_run(valid_name(a.name))
+
+
+def cmd_verify(a) -> int:
+    return cmd_verify_run(valid_name(a.name))
+
+
+def cmd_report(a) -> int:
+    return cmd_report_run(valid_name(a.name))
+
+
+# ------------------------------------------------------------------ status
+
+def cmd_status_all() -> int:
+    script = f"""cd {RROOT}/runs 2>/dev/null || exit 0
+for d in */; do d=${{d%/}}; [ -f $d/status.json ] || continue
+python3 - "$d" <<'PY'
+import json, sys
+d = sys.argv[1]
+s = json.load(open(d + "/status.json"))
+cur = [k for k, v in (s.get("stages") or {{}}).items() if v.get("state") == "running"]
+print(f"{{d:<28}} {{s.get('state','?'):<9}} exit={{s.get('exit')}} {{'running: ' + ','.join(cur) if cur else ''}} {{s.get('updated','')}}")
+PY
+done"""
+    res = ssh(script, timeout=60)
+    if res.returncode == 255:
+        say("ns: cannot reach tyrone (ssh failed)")
+        return 20
+    say(res.stdout.rstrip() or "no runs with a status.json on tyrone")
+    return 0
+
+
+def cmd_status(a) -> int:
+    if not a.name:
+        return cmd_status_all()
+    name = valid_name(a.name)
+    st = read_status(name)
+    if st is None:
+        say("ns: cannot reach tyrone (ssh failed)")
+        return 20
+    if st.get("state") in ("none", "unreadable"):
+        say(f"{name}: no status.json on tyrone ({st.get('state')})")
+        return 1
+    say(f"{name}: {st.get('state')}  (pid {st.get('pid')}, started {st.get('started')}, updated {st.get('updated')})")
+    for s in STAGES:
+        v = (st.get("stages") or {}).get(s)
+        if not v:
+            continue
+        line = f"  {s:<9}{v.get('state', '?'):<16}"
+        if v.get("seconds") is not None:
+            line += f"{v['seconds']:>8}s"
+        elif v.get("elapsed_s") is not None:
+            line += f"{v['elapsed_s']:>8}s running"
+        if v.get("note"):
+            line += f"  {v['note']}"
+        elif v.get("last_line") and v.get("state") in ("running",) or str(v.get("state", "")).startswith("exit-"):
+            line += f"  {v.get('last_line', '')}"
+        say(line)
+    if st.get("exit") is not None:
+        say(f"exit {st['exit']}" + ("  INCOMPLETE (a stage module is missing)" if st.get("incomplete") else ""))
+    tail = ssh(f"tail -n {a.tail} {remote_run(name)}/logs/runner.log 2>/dev/null", timeout=20).stdout
+    if a.tail and tail.strip():
+        say("runner.log:")
+        say(textwrap_indent(tail))
+    return 0
+
+
+def textwrap_indent(s: str) -> str:
+    return "\n".join("  " + ln for ln in s.rstrip().splitlines())
+
+
+# ------------------------------------------------------------------ serve
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".mjs": "text/javascript",
+                      ".js": "text/javascript", ".wasm": "application/wasm", ".spz": "application/octet-stream",
+                      ".splat": "application/octet-stream", ".json": "application/json"}
+
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+    def log_message(self, fmt, *args):  # quiet
+        pass
+
+
+def serve(name: str, port: int, directory: Path | None = None) -> int:
+    web = directory or (local_run(name) / "80_web")
+    if not web.is_dir():
+        die(f"{web} does not exist; run ./ns pull {name} and ./ns bundle {name} first")
+
+    class H(Handler):
+        def __init__(self, *args, **kw):
+            super().__init__(*args, directory=str(web), **kw)
+
+    socketserver.TCPServer.allow_reuse_address = True
+    try:
+        srv = socketserver.ThreadingTCPServer(("127.0.0.1", port), H)
+        srv.daemon_threads = True
+    except OSError as exc:
+        die(f"cannot listen on 127.0.0.1:{port}: {exc}", 20)
+    say(f"serving {web}\n  http://127.0.0.1:{port}/?scene={name}\n  Ctrl-C to stop")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        say("\nstopped")
+    return 0
+
+
+def cmd_serve(a) -> int:
+    return serve(valid_name(a.name), a.port, Path(a.dir) if a.dir else None)
+
+
+# ------------------------------------------------------------------ rescale
+
+def cmd_rescale(a) -> int:
+    name = valid_name(a.name)
+    opts = []
+    if a.use_measures:
+        opts.append("--use-measures")
+    if a.scale is not None:
+        opts.append(f"--scale={a.scale}")
+    if a.factor is not None:
+        opts.append(f"--factor={a.factor}")
+    if not opts:
+        die("give --scale K, --factor K or --use-measures")
+    t0 = time.time()
+    if not a.no_sync and sync_code(quiet=True) != 0:
+        return 20
+    flags = ["--rescale"] + sum([["--opt", f"rescale:{o}"] for o in opts], [])
+    for rf in a.runner_flag or []:
+        flags += shlex.split(rf)
+    pid = launch_remote(name, flags)
+    if pid is None:
+        say("ns: could not start the runner on tyrone")
+        return 20
+    results = poll_runs({name: pid}, light_pull=False)
+    code = results.get(name, 20)
+    if code != 0:
+        say(f"ns: rescale failed with exit {code}; see runs/{name}/logs/rescale.log and grid.log on tyrone")
+        return code
+    if cmd_pull(argparse.Namespace(name=name, light=False, force=a.force, with_frames=False, with_ply=False, all=False), name, light=False) != 0:
+        return 20
+    post_pull(name)
+    secs = time.time() - t0
+    say(f"rescale done in {secs:.0f}s" + ("" if secs <= 300 else "  (over the 5 minute target)"))
+    return 0
+
+
+# ------------------------------------------------------------------ package and publish
+
+def sha256_of(p: Path) -> str:
+    h = hashlib.sha256()
+    with p.open("rb") as fh:
+        for b in iter(lambda: fh.read(1 << 20), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+def cmd_package(a) -> int:
+    name = valid_name(a.name)
+    run = local_run(name)
+    if not run.exists():
+        die(f"{run} does not exist; run ./ns pull {name} first")
+    out = run / "package"
+    web_bytes = sum(f.stat().st_size for f in (run / "80_web").rglob("*") if f.is_file()) if (run / "80_web").is_dir() else 0
+    need = 0.05 + 1.1 * web_bytes / 1e9
+    if free_gb(run) < need:
+        die(f"only {free_gb(run):.2f} GB free on the Mac; packaging needs about {need:.2f} GB", 20)
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir()
+    made, missing = [], []
+
+    web = run / "80_web"
+    if web.is_dir():
+        z = out / "05_Viewer_Offline.zip"
+        with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in sorted(web.rglob("*")):
+                if f.is_file():
+                    zf.write(f, f"web/{f.relative_to(web)}")
+            zf.writestr("web/START_HERE.txt",
+                        f"Offline viewer. In this folder run:\n  python3 -m http.server 5178\n"
+                        f"then open http://127.0.0.1:5178/?scene={name}\n")
+        made.append(z)
+    else:
+        missing.append("05_Viewer_Offline.zip (no 80_web/; run ./ns bundle)")
+
+    res = out / "06_Results"
+    res.mkdir()
+    for fn in ("report.html", "report.json", "timings.json", "run.json"):
+        if (run / fn).exists():
+            shutil.copy2(run / fn, res / fn)
+            made.append(res / fn)
+        else:
+            missing.append(f"06_Results/{fn}")
+    held = run / "60_export" / "heldout"
+    if held.is_dir():
+        shutil.copytree(held, res / "heldout")
+        made.append(res / "heldout")
+    evald = REPO / "eval" / "results"
+    for j in sorted(evald.glob("*.json")) if evald.is_dir() else []:
+        shutil.copy2(j, res / j.name)
+        made.append(res / j.name)
+
+    inp = out / "04_Inputs_Used"
+    inp.mkdir()
+    meta = run / "input" / "meta.json"
+    if meta.exists():
+        shutil.copy2(meta, inp / "meta.json")
+        m = json.loads(meta.read_text())
+        lines = [f"height_cm: {m.get('height_cm')}"] + [f"{x['what']}: {x['metres']} m ({x.get('method', '')})"
+                                                         for x in m.get("measures", [])]
+        (inp / "measurements.txt").write_text("\n".join(lines) + "\n")
+        made.append(inp / "measurements.txt")
+    else:
+        missing.append("04_Inputs_Used/measurements.txt")
+    for f in sorted((run / "input").glob("*")) if (run / "input").is_dir() else []:
+        if f.is_file() and f.suffix.lower() in (".mp4", ".mov", ".m4v", ".jpg", ".jpeg", ".png") and a.with_inputs:
+            shutil.copy2(f, inp / f.name)
+            made.append(inp / f.name)
+    if not a.with_inputs:
+        missing.append("04_Inputs_Used/<original videos> (add --with-inputs to copy them)")
+
+    code = out / "03_Code_Repository"
+    code.mkdir()
+    head = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--verify", "HEAD"], capture_output=True)
+    if head.returncode == 0:
+        z = code / f"namma-space-{git_sha()}.zip"
+        subprocess.run(["git", "-C", str(REPO), "archive", "--format=zip", "-o", str(z), "HEAD"], check=True)
+        made.append(z)
+    else:
+        missing.append("03_Code_Repository/ (the repo has no commit yet; root commits first)")
+
+    for want in ("00_START_HERE_Proof_of_Concept_and_Links.pdf", "01_Technical_Abstract.pdf", "02_Demo_Video.mp4", "02_Demo_Video.srt"):
+        found = None
+        for base in ([Path(a.extra)] if a.extra else []) + [REPO / "docs" / "build", REPO / "docs", REPO / "video" / "out", REPO / "video"]:
+            if (base / want).exists():
+                found = base / want
+                break
+        if found:
+            shutil.copy2(found, out / want)
+            made.append(out / want)
+        else:
+            missing.append(f"{want} (not found; pass --extra DIR holding it)")
+
+    lines = ["Namma Space Round 1 package", f"run: {name}", f"git: {git_sha()}",
+             f"built: {dt.datetime.now().astimezone().isoformat(timespec='seconds')}", "", "files:"]
+    for f in sorted(out.rglob("*")):
+        if f.is_file():
+            lines.append(f"  {f.relative_to(out)}  {f.stat().st_size / 1e6:.2f} MB  sha256:{sha256_of(f)[:16]}")
+    lines += ["", "missing:"] + [f"  {m}" for m in missing]
+    (out / "MANIFEST.txt").write_text("\n".join(lines) + "\n")
+    say("\n".join(lines))
+    say(f"\npackage at {out}")
+    return 0
+
+
+def public_files(name: str) -> list:
+    web = local_run(name) / "80_web"
+    return [(f.relative_to(web), f.stat().st_size) for f in sorted(web.rglob("*")) if f.is_file()] if web.is_dir() else []
+
+
+def cmd_publish(a) -> int:
+    name = valid_name(a.name)
+    files = public_files(name)
+    total = sum(s for _, s in files)
+    say(f"publish plan for {name} (nothing is sent in a dry run)")
+    say("  1. GitHub repo (public): the source tree at the current commit; git: " + git_sha())
+    say(f"  2. GitHub Pages (gh-pages branch of the same repo): runs/{name}/80_web, {len(files)} files, {total / 1e6:.1f} MB")
+    big = [(str(p), s) for p, s in files if s > 99 * 1024 * 1024]
+    if big:
+        say("     BLOCKER: files at or over 100 MiB (GitHub's limit): " + ", ".join(f"{p} ({s / 1e6:.0f} MB)" for p, s in big))
+    for p, s in files[:40]:
+        say(f"       {p}  {s / 1e6:.2f} MB")
+    if len(files) > 40:
+        say(f"       ... and {len(files) - 40} more")
+    say("  3. Hugging Face mirror (optional): needs your account; not done by this command")
+    say("  4. Public URL after Pages builds: https://<user>.github.io/<repo>/?scene=" + name)
+    if not files:
+        say("  NOTE: no 80_web/ yet, so there is nothing to publish; run ./ns bundle " + name)
+    if not a.execute:
+        say("\ndry run only. To publish for real: ./ns publish %s --execute (asks you to type a phrase)." % name)
+        return 0
+    phrase = f"PUBLISH {name} TO THE PUBLIC INTERNET"
+    if not sys.stdin.isatty():
+        die("a real publish needs an interactive terminal where you type the confirmation phrase", 2)
+    say(f"\nThis makes the files above public and cannot be taken back. Type exactly:\n  {phrase}")
+    typed = input("> ").strip()
+    if typed != phrase:
+        say("phrase did not match; nothing published")
+        return 2
+    return real_publish(name, files)
+
+
+def real_publish(name: str, files: list) -> int:
+    """Push the repo and the gh-pages branch. UNTESTED by design (never run during the build)."""
+    if not files:
+        die("nothing to publish", 2)
+    web = local_run(name) / "80_web"
+    if subprocess.run(["git", "-C", str(REPO), "remote", "get-url", "origin"], capture_output=True).returncode != 0:
+        die("no git remote 'origin'; create the GitHub repo and add the remote first", 2)
+    with tempfile.TemporaryDirectory() as td:
+        work = Path(td) / "pages"
+        shutil.copytree(web, work)
+        (work / ".nojekyll").write_text("")
+        for cmd in (["git", "init", "-q", "-b", "gh-pages"], ["git", "add", "-A"],
+                    ["git", "-c", "user.name=ns", "-c", "user.email=ns@localhost", "commit", "-q", "-m", f"publish {name}"]):
+            subprocess.run(cmd, cwd=work, check=True)
+        url = subprocess.run(["git", "-C", str(REPO), "remote", "get-url", "origin"], capture_output=True, text=True).stdout.strip()
+        subprocess.run(["git", "push", "-f", url, "gh-pages"], cwd=work, check=True)
+    say("pushed gh-pages. Enable Pages for that branch in the repo settings, then test the URL logged out.")
+    return 0
+
+
+# ------------------------------------------------------------------ test
+
+def cmd_test(a) -> int:
+    pkg = a.pkg
+    if pkg in ("e2e", "wp0", "common", "remote", "report", "ns"):
+        dirs = [REPO / "test" / "e2e"]
+    elif pkg == "all":
+        dirs = [REPO / "test" / "e2e"] + sorted(p for p in (REPO / "test" / "unit").glob("*") if p.is_dir())
+    else:
+        d = REPO / "test" / "unit" / pkg
+        if not d.is_dir():
+            die(f"no tests at test/unit/{pkg}/ (packages: " + ", ".join(sorted(p.name for p in (REPO / 'test' / 'unit').glob('*'))) + ")")
+        dirs = [d]
+    if a.remote:
+        if sync_code(quiet=True) != 0:
+            return 20
+        image = a.image or "namma-space-gpu:0.1"
+        rc = 0
+        for d in dirs:
+            rel = d.relative_to(REPO)
+            cmd = (f"{RROOT}/bin/nsdocker rh-test-{pkg} {image} sh -c "
+                   + shlex.quote(f"cd /w/repo && PYTHONPATH=/w/repo python3 -m unittest discover -s {rel} -p 'test*.py'"))
+            res = subprocess.run(["ssh", *SSH_OPTS, HOST, cmd])
+            rc = rc or res.returncode
+        return rc
+    rc = 0
+    env = dict(os.environ, PYTHONPATH=str(REPO) + os.pathsep + os.environ.get("PYTHONPATH", ""))
+    for d in dirs:
+        script = d / "run_tests.sh"
+        if script.exists():
+            r = subprocess.run(["bash", str(script)], cwd=str(REPO), env=env)
+        else:
+            r = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", str(d), "-p", "test*.py"] + (["-v"] if a.verbose else []),
+                               cwd=str(REPO), env=env)
+        rc = rc or r.returncode
+    return rc
+
+
+# ------------------------------------------------------------------ main
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="ns", description="Namma Space: phone video to a walkable splat twin",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("doctor", help="check ssh, disk, GPU, images, Mac tools, copy speed").set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("sync", help="rsync code to tyrone")
+    p.add_argument("subdir", nargs="?")
+    p.set_defaults(fn=cmd_sync)
+
+    p = sub.add_parser("check", help="preflight a video on the Mac")
+    p.add_argument("videos", nargs="+")
+    p.add_argument("--name", help="also write runs/<name>/00_preflight/check.json")
+    p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser("run", help="upload, run all stages on tyrone, pull, bundle, verify, report")
+    p.add_argument("video", nargs="?")
+    p.add_argument("--frames")
+    p.add_argument("--name", required=True)
+    p.add_argument("--height", type=float, help="your height in cm (scale cue)")
+    p.add_argument("--measure", action="append", default=[], help="what=metres[:method], e.g. length=4.12")
+    p.add_argument("--note")
+    p.add_argument("--kind", choices=["captured", "public", "fixture"], help="provenance for the bundle (default captured)")
+    p.add_argument("--license")
+    p.add_argument("--attribution")
+    p.add_argument("--source")
+    p.add_argument("--title")
+    p.add_argument("--take-b", help="second video; runs as <name>-b in parallel")
+    p.add_argument("--quick", action="store_true", help="7k-step training")
+    p.add_argument("--from", dest="from_stage", choices=STAGES)
+    p.add_argument("--to", choices=STAGES)
+    p.add_argument("--opt", action="append", default=[], help="STAGE:ARG passed to one stage")
+    p.add_argument("--runner-flag", action="append", default=[], help="extra flag for ns_remote.py, e.g. --stub-dir=test/e2e/stubs")
+    p.add_argument("--stub-cfg", help="JSON file uploaded as runs/<name>/stub_cfg.json (test stubs)")
+    p.add_argument("--no-check", action="store_true")
+    p.add_argument("--no-sync", action="store_true")
+    p.add_argument("--no-pull", action="store_true")
+    p.add_argument("--detach", action="store_true", help="start the run and return")
+    p.add_argument("--dry-run", action="store_true", help="upload, then print the stage plan without running anything")
+    p.add_argument("--force", action="store_true", help="go on after a FAIL check or a low-disk pull warning")
+    p.add_argument("--serve", action="store_true")
+    p.add_argument("--open", action="store_true", help="open report.html when done")
+    p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("status", help="stage table of a run (no name: list all runs)")
+    p.add_argument("name", nargs="?")
+    p.add_argument("--tail", type=int, default=5)
+    p.set_defaults(fn=cmd_status)
+
+    p = sub.add_parser("pull", help="rsync results to runs/<name>/")
+    p.add_argument("name")
+    p.add_argument("--light", action="store_true", help="JSON, logs and figures only")
+    p.add_argument("--with-frames", action="store_true")
+    p.add_argument("--with-ply", action="store_true")
+    p.add_argument("--all", action="store_true")
+    p.add_argument("--force", action="store_true", help="pull even with little free disk")
+    p.set_defaults(fn=cmd_pull)
+
+    for nm, fn in (("bundle", cmd_bundle), ("verify", cmd_verify), ("report", cmd_report)):
+        p = sub.add_parser(nm, help=f"Mac-side {nm} for a pulled run")
+        p.add_argument("name")
+        p.set_defaults(fn=fn)
+
+    p = sub.add_parser("serve", help="serve runs/<name>/80_web on 127.0.0.1")
+    p.add_argument("name")
+    p.add_argument("--port", type=int, default=PORT)
+    p.add_argument("--dir")
+    p.set_defaults(fn=cmd_serve)
+
+    p = sub.add_parser("rescale", help="change scale without retraining")
+    p.add_argument("name")
+    p.add_argument("--scale", type=float, help="new absolute scale")
+    p.add_argument("--factor", type=float, help="multiply the current scale by this")
+    p.add_argument("--use-measures", action="store_true", help="adopt the scale of your tape distances")
+    p.add_argument("--no-sync", action="store_true")
+    p.add_argument("--runner-flag", action="append", default=[])
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_rescale)
+
+    p = sub.add_parser("package", help="assemble the Drive folder contents")
+    p.add_argument("name")
+    p.add_argument("--with-inputs", action="store_true", help="copy the original videos and photos")
+    p.add_argument("--extra", help="folder holding the finished PDFs and the video")
+    p.set_defaults(fn=cmd_package)
+
+    p = sub.add_parser("publish", help="dry run of what goes public; --execute asks for a typed phrase")
+    p.add_argument("name")
+    p.add_argument("--dry-run", action="store_true", help="(default) print the plan only")
+    p.add_argument("--execute", action="store_true")
+    p.set_defaults(fn=cmd_publish)
+
+    p = sub.add_parser("test", help="run a package's tests")
+    p.add_argument("pkg")
+    p.add_argument("--remote", action="store_true", help="run inside a container on tyrone")
+    p.add_argument("--image")
+    p.add_argument("-v", "--verbose", action="store_true")
+    p.set_defaults(fn=cmd_test)
+    return ap
+
+
+def main(argv: list | None = None) -> int:
+    a = build_parser().parse_args(argv)
+    try:
+        return int(a.fn(a) or 0)
+    except KeyboardInterrupt:
+        say("\ninterrupted")
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())

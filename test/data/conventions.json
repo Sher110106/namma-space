@@ -1,0 +1,119 @@
+{
+ "schema": "namma-space/conventions@1",
+ "doc": "COLMAP world-to-camera (R, t) to three.js camera. position = T_final(-R^T t); rotation = R_final * R^T * diag(1,-1,-1); quaternion is [x,y,z,w]; compare quaternions up to sign (q and -q are the same rotation). Matrices are row-major. See CONTRACTS 2.0.",
+ "tolerance": {
+  "position_m": 1e-09,
+  "quaternion": 1e-09,
+  "matrix": 1e-09
+ },
+ "poses": [
+  {
+   "id": "identity",
+   "note": "COLMAP identity pose: camera at the origin looking along +Z. In three.js that is a 180 degree turn about X, quaternion (1,0,0,0).",
+   "colmap": {
+    "R_w2c": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    "t_w2c": [0.0, 0.0, 0.0]
+   },
+   "threejs": {
+    "position": [0.0, 0.0, 0.0],
+    "quaternion_xyzw": [1.0, 0.0, 0.0, 0.0],
+    "rotation_matrix": [[1, 0, 0], [0, -1, 0], [0, 0, -1]],
+    "forward_world": [0, 0, 1]
+   }
+  },
+  {
+   "id": "level_minus_z",
+   "note": "Level camera at (1,1.4,2) looking along -Z (three.js default). R_w2c = diag(1,-1,-1), t = -R*C = (-1,1.4,2). Quaternion is identity.",
+   "colmap": {
+    "R_w2c": [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]],
+    "t_w2c": [-1.0, 1.4, 2.0]
+   },
+   "threejs": {
+    "position": [1.0, 1.4, 2.0],
+    "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0],
+    "rotation_matrix": [[1.0, 0.0, 0.0], [0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    "forward_world": [0.0, 0.0, -1.0],
+    "yaw_deg": 0,
+    "pitch_deg": 0
+   }
+  },
+  {
+   "id": "yaw_left_90",
+   "note": "Camera at (-0.5,1.5,3) turned 90 degrees left about +Y: looks along -X. Quaternion (0, sin45, 0, cos45).",
+   "colmap": {
+    "R_w2c": [[0.0, 0.0, -1.0], [0.0, -1.0, 0.0], [-1.0, 0.0, 0.0]],
+    "t_w2c": [3.0, 1.5, -0.5]
+   },
+   "threejs": {
+    "position": [-0.5, 1.5, 3.0],
+    "quaternion_xyzw": [0.0, 0.707106781187, 0.0, 0.707106781187],
+    "rotation_matrix": [[0.0, 0.0, 1.0], [0, 1.0, 0.0], [-1.0, 0.0, 0.0]],
+    "forward_world": [-1.0, 0.0, 0.0],
+    "yaw_deg": 90,
+    "pitch_deg": 0
+   }
+  },
+  {
+   "id": "pitch_up_30",
+   "note": "Camera at (2,1.2,-1) looking 30 degrees above level along -Z. Quaternion (sin15, 0, 0, cos15); forward = (0, 0.5, -0.866).",
+   "colmap": {
+    "R_w2c": [[1.0, 0.0, 0.0], [0.0, -0.866025403784, -0.5], [0.0, 0.5, -0.866025403784]],
+    "t_w2c": [-2.0, 0.539230484541, -1.466025403784]
+   },
+   "threejs": {
+    "position": [2.0, 1.2, -1.0],
+    "quaternion_xyzw": [0.258819045103, 0.0, 0.0, 0.965925826289],
+    "rotation_matrix": [[1.0, 0.0, 0.0], [0, 0.866025403784, -0.5], [0.0, 0.5, 0.866025403784]],
+    "forward_world": [0.0, 0.5, -0.866025403784],
+    "yaw_deg": 0,
+    "pitch_deg": 30
+   }
+  }
+ ],
+ "t_final_cases": [
+  {
+   "id": "scale2_shift",
+   "pose": "yaw_left_90",
+   "T_final": [[2.0, 0, 0, 1.0], [0, 2.0, 0, -0.5], [0, 0, 2.0, 0.25], [0, 0, 0, 1]],
+   "expected": {
+    "position": [0.0, 2.5, 6.25],
+    "quaternion_xyzw": [0.0, 0.707106781187, 0.0, 0.707106781187]
+   }
+  },
+  {
+   "id": "scale_half_yaw90",
+   "pose": "level_minus_z",
+   "T_final": [[0.0, 0.0, 0.5, 0.0], [0.0, 0.5, 0.0, 0.1], [-0.5, 0.0, 0.0, 0.0], [0, 0, 0, 1]],
+   "expected": {
+    "position": [1.0, 0.8, -0.5],
+    "quaternion_xyzw": [0.0, 0.707106781187, 0.0, 0.707106781187]
+   }
+  }
+ ],
+ "intrinsics": [
+  {
+   "width": 1920,
+   "height": 1080,
+   "fx": 1500.0,
+   "fy": 1500.0,
+   "cx": 960.0,
+   "cy": 540.0,
+   "near": 0.05,
+   "far": 50.0,
+   "fov_y_deg": 39.59775270905,
+   "projection_matrix_rowmajor": [[1.5625, 0, 0.0, 0], [0, 2.777777777778, 0.0, 0], [0, 0, -1.002002002002, -0.1001001001], [0, 0, -1, 0]]
+  },
+  {
+   "width": 1080,
+   "height": 1920,
+   "fx": 1200.0,
+   "fy": 1210.0,
+   "cx": 545.0,
+   "cy": 950.0,
+   "near": 0.05,
+   "far": 50.0,
+   "fov_y_deg": 76.856154691368,
+   "projection_matrix_rowmajor": [[2.222222222222, 0, -0.009259259259, 0], [0, 1.260416666667, -0.010416666667, 0], [0, 0, -1.002002002002, -0.1001001001], [0, 0, -1, 0]]
+  }
+ ]
+}
