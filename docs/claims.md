@@ -5,7 +5,7 @@ Use a claim only when its evidence file exists and its value is measured. If it 
 | Claim | Evidence | Fallback wording |
 |---|---|---|
 | Phone video only, with measured fidelity | `report.json`; `50_train/`; `60_export/export.json`; `eval/results/mushroom_*.json`; `eval/results/mip360_room.json`; viewer reality check | “Phone video input; we report held-out image scores and public-room checks.” |
-| Close to LiDAR | `eval/results/mushroom_*.json`, with phone-only F-score at the required threshold beside the LiDAR baseline | “Compared with the public-room reference; no LiDAR closeness claim.” |
+| Close to LiDAR | `eval/results/mushroom_*.json`, with phone-only F-score at the required threshold beside the LiDAR baseline | **Threshold not met (checked 30 Oct 13:05): ours/LiDAR F@5cm = 0.630/0.803 = 78% on honka, 0.368/0.737 = 50% on vr_room; the rule needs 80%.** Use the fallback: give both numbers side by side with no adjective, e.g. “On the public honka room, phone-only geometry scores F@5cm 0.63 against 0.80 for iPhone LiDAR fusion (same fusion, same crop).” |
 | Behaves like a place: level frame, scale interval, collision and same-geometry minimap | `40_align/align.json`; `70_grid/grid.json`; `90_verify/verify.json`; `run.json` | “The bundle carries an estimated scale and a grid; manual steps are listed.” |
 | One-page SOP, one command and repeatable run | `docs/SOP_card.pdf`; `docs/SOP.md`; `00_preflight/check.json`; `timings.json`; rehearsal log; `test/` | “A documented local pipeline with a logged capture check.” |
 | Measured viewer budget | `90_verify/verify.json`, with device, browser, GPU, initial-frame time, frame rate and bytes | “Measured on the listed test device only.” |
