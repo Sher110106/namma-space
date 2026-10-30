@@ -328,7 +328,7 @@ def build(args):
         "pipeline": [P("cmd") + (1.0,), P("arch") + (3.0,), P("stages") + (2.4,)],
         "walk": [M("walk")], "map": [M("map")], "reality": [M("reality")], "bench": [M("bench_a"), M("bench_b")], "measure": [M("measure")],
         "route_places": [M("route")], "route_none": [P("route_none") + (1.0,)],
-        "results": [P("res_scale") + (1.0,), P("res_geom") + (1.4,), P("res_view") + (1.2,)],
+        "results": [P("res_scale") + (1.6,), P("res_geom") + (1.4,), P("res_view") + (1.2,)],
         "limits": [P("limits") + (1.0,), P("links") + (1.6,)],
     }
 

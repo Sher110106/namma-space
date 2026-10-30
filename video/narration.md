@@ -50,7 +50,7 @@ Say: Search, jump, route and follow are a Round 2 preview. They will appear in t
 
 ## results
 Screen: three result slides, all values read from JSON.
-Say: Results, from two public rooms. The automatic scale error is {honka_scale_err} on honka and {vr_scale_err} on vr room, and the true value sits inside the 68 percent interval in both. Against a Faro laser scan, F-score at 5 centimetres: phone only {honka_ours_f} and {vr_ours_f}. iPhone LiDAR fusion {honka_lidar_f} and {vr_lidar_f}. We did not match LiDAR. Before scoring, our camera path was similarity-fitted to the dataset's camera path. Depth error against LiDAR, median: {honka_depth} and {vr_depth}. Our trainer scores {mip_psnr} dB on the Mip-NeRF 360 room, against {mip_pub} published. The viewer ran at {fps} frames per second on an Apple M1 in headless Chrome. Other hardware is untested.
+Say: Results, from two public rooms. The automatic scale error is {honka_scale_err} on honka and {vr_scale_err} on vr room, and the true value sits inside the 68 percent interval in both. Depth error against LiDAR, median: {honka_depth} and {vr_depth}. Against a Faro laser scan, F-score at 5 centimetres: phone only {honka_ours_f} and {vr_ours_f}. iPhone LiDAR fusion {honka_lidar_f} and {vr_lidar_f}. We did not match LiDAR. Before scoring, our camera path was similarity-fitted to the dataset's camera path. Our trainer scores {mip_psnr} dB on the Mip-NeRF 360 room, against {mip_pub} published. The viewer ran at {fps} frames per second on an Apple M1 in headless Chrome. Other hardware is untested.
 
 ## limits
 Screen: limits slide, then links slide with placeholders.
