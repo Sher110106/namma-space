@@ -14,16 +14,16 @@ Namma Space turns an ordinary indoor phone video into a level 3D Gaussian-splat 
 ## Results
 
 <!-- results:start -->
-Measured on `fix-honka` (a public room; the final entry uses our own room, `room`). Sources: `runs/fix-honka/report.json`, `timings.json`, `90_verify/verify.json`, `eval/results/*.json`.
+Measured on `room`. Sources: `runs/room/report.json`, `timings.json`, `90_verify/verify.json`, `eval/results/*.json`.
 
 | What | Value |
 |---|---|
-| Scene | MuSHRoom honka (public test room) |
-| Held-out photos, PSNR / SSIM / LPIPS | 21.51 dB / 0.822 / 0.220 (8 photos never used in training) |
-| Scene size | 611,196 splats, 13.3 MB (plus a 3.4 MB preview) |
-| Walk in the browser | 60.0 fps, p95 16.7 ms, on screen after 0.32 s (one Apple M1, headless Chrome; other hardware unverified) |
-| Run time | 60 min in all stages, 60 min of it in GPU stages (shared RTX A6000) |
-| Scale | ±13 % (68 % interval); estimated, not checked by tape |
+| Scene | Team Quad's room |
+| Held-out photos, PSNR / SSIM / LPIPS | 23.72 dB / 0.933 / 0.195 (8 photos never used in training) |
+| Scene size | 283,842 splats, 7.1 MB (plus a 3.2 MB preview) |
+| Walk in the browser | 60.0 fps, p95 16.8 ms, on screen after 0.54 s (one Apple M1, headless Chrome; other hardware unverified) |
+| Run time | 52 min in all stages, 51 min of it in GPU stages (shared RTX A6000) |
+| Scale | ±13 % (68 % interval); estimated from camera height, then corrected x0.80: the automatic estimate was +25% against the team's rough sizes (rough sizes: table 2.2 x 1.0 m, room about 3.0 x 2.2 m (not a tape); table-top height assumed 0.75 m) |
 | Walls | 200 random walks and 16 pushes: 0 positions in blocked cells |
 | Scale check, two public rooms | 4.3 % (honka), 3.1 % (vr_room) automatic error; true scale inside the 68 % interval in both |
 | Geometry vs Faro laser scan, F@5cm | honka 0.52 phone only vs 0.80 iPhone LiDAR fusion; vr_room 0.40 vs 0.74 (same fusion and crop; our camera path was fitted to the dataset path first, scale included) |

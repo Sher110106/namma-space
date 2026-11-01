@@ -127,7 +127,13 @@ def build(run: str, args: argparse.Namespace) -> dict:
     scale = rep["align"]["scale"]
     cues = "; ".join(c["note"] for c in scale["cues"] if c.get("used"))
     checked = scale["checked_against"]
-    scale_status = f"checked against {checked}" if checked else "estimated, not checked by tape"
+    chk = scale.get("check") or {}
+    if checked and scale.get("user_factor") and chk.get("auto_error_pct") is not None:
+        # a rescale checked against measured or rough sizes (ns rescale): say what was wrong and what changed
+        scale_status = (f"estimated from camera height, then corrected x{float(scale['user_factor']):.2f}: the automatic estimate "
+                        f"was {float(chk['auto_error_pct']):+.0f}% against the {checked} ({chk.get('note', 'not a tape')})")
+    else:
+        scale_status = f"checked against {checked}" if checked else "estimated, not checked by tape"
 
     gpu_s = sum(st.get(k, 0) for k in ("sfm", "train", "geometry", "export"))
     honka, vr = room_eval("honka"), room_eval("vr_room")
@@ -137,6 +143,7 @@ def build(run: str, args: argparse.Namespace) -> dict:
     v = {
         "run": run,
         "mode": "final" if final else "dryrun",
+        "banner_style": "display:none" if final else "",
         "dryrun_banner": "" if final else f"Dry run on a public room: MuSHRoom {run.replace('rh-', '')} (CC BY 4.0). The final submission is built from our own room with the same command.",
         "team_id_html": slot(args.team_id or SLOT_TEAM, not args.team_id),
         "viewer_link_html": slot(args.viewer_url or SLOT_VIEWER, not args.viewer_url),
@@ -150,7 +157,7 @@ def build(run: str, args: argparse.Namespace) -> dict:
         "frames_kept": f'{rep["frames"]["n_kept"]}',
         "frames_cand": f'{rep["frames"]["n_cand"]}',
         "blur_drops": f'{rep["frames"]["dropped"]["blur"]}',
-        "check_verdict": (rep["input"].get("check") or {}).get("verdict", "not run (frame folder)"),
+        "check_verdict": (rep["input"].get("check") or {}).get("verdict", "not run" if vids else "not run (frame folder)"),
         # SfM
         "sfm_name": rep["sfm"]["chosen"],
         "sfm_desc": sfm_v["desc"],
@@ -177,7 +184,8 @@ def build(run: str, args: argparse.Namespace) -> dict:
         "preview_mb": f'{rep["export"]["preview"]["mb"]:.1f}',
         "sd_psnr_drop": f'{rep["export"]["sd"]["psnr_drop_db"]:.2f}',
         "walkable": f'{rep["grid"]["walkable_m2"]:.1f}',
-        "extent": " x ".join(f"{x:.1f}" for x in (rep["grid"].get("room_extent_m") or [])) or "n/a",
+        "extent": " x ".join(f"{x:.1f}" for x in (rep["grid"].get("room_extent_m") or [])) or
+                  ("about 3.0 x 2.2 (team's rough size; not measured by the grid stage)" if (scale.get("check") or {}) else "n/a"),
         "walls_n": f'{rep["walls"]["walks"]}', "pushes_n": f'{rep["walls"]["pushes"]}',
         "penetrations": f'{rep["walls"]["penetrations"]}',
         # timings

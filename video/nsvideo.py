@@ -79,7 +79,7 @@ def load_values(run: str) -> dict:
     st = tim["stages"]
     sfm = next(v for v in rep["sfm"]["variants"] if v["name"] == rep["sfm"]["chosen"])
     tr = next(v for v in rep["train"]["variants"] if v["name"] == rep["train"]["chosen"])
-    n_input = sum(i["n_input"] for i in rep["frames"]["inputs"])
+    n_input = sum(int(i.get("n_input", i.get("n_cand", 0)) or 0) for i in rep["frames"]["inputs"])  # frames: inputs given; videos: candidates sampled
     colmap = None
     try:
         colmap = jl(rd / "20_sfm" / "sfm.json").get("colmap")
