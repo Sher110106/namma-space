@@ -54,7 +54,7 @@ def slides(V: dict) -> dict:
 <div style='padding-top:20px'><div class='eyebrow'>Techfest IIT Bombay &middot; Round 1</div>
 <div style='font-size:150px;font-weight:800;line-height:1.05;margin-bottom:40px'>Namma Space</div>
 <p style='font-size:60px;line-height:1.25'>One phone video.<br>One command.<br><span class='acc'>A room you can walk through.</span></p></div>
-<div class='foot'>Dry run on a public room: MuSHRoom honka, CC BY 4.0</div>""")
+<div class='foot'>{e(V['foot'])}</div>""")
     S["scope"] = page(f"""
 <div class='eyebrow'>Scope</div><h2>One indoor room, from one phone video</h2>
 <div class='cols'><div class='card'><p class='acc' style='font-weight:700'>In this build</p><ul>
@@ -75,7 +75,7 @@ def slides(V: dict) -> dict:
     S["cmd"] = page(f"""
 <div class='eyebrow'>The pipeline</div><h2>One command</h2>
 <div class='term mono'><span class='p'>$</span> ./ns run video.mp4</div>
-<ul style='margin-top:36px'><li>Runs on a shared RTX A6000 GPU</li><li>This public room: {e(V['t_total_min'])} in total</li><li>Every stage time on the next slides comes from the run's own records</li></ul>""")
+<ul style='margin-top:36px'><li>Runs on a shared RTX A6000 GPU</li><li>{e(V['room_word'])}: {e(V['t_total_min'])} in total</li><li>Every stage time on the next slides comes from the run's own records</li></ul>""")
     boxes = V["arch"]
     bx = []
     for i, b in enumerate(boxes):
@@ -110,7 +110,7 @@ def slides(V: dict) -> dict:
     S["limits"] = page(f"""
 <div class='eyebrow'>Limits</div><h2>What this does not do</h2>
 <div class='cols'><div class='card'><p class='warn' style='font-weight:700'>Not built</p><ul><li>Multiple floors</li><li>WebXR AR</li><li>Plan registration</li></ul></div>
-<div class='card'><p class='warn' style='font-weight:700'>Estimated or untested</p><ul><li>Scale: from camera height, {e(V['scale_pct'])} interval, not checked by tape</li><li>Other hardware: untested</li></ul></div></div>""")
+<div class='card'><p class='warn' style='font-weight:700'>Estimated or untested</p><ul><li>{e(V['scale_limit'])}</li><li>Other hardware: untested</li></ul></div></div>""")
     S["links"] = page(f"""
 <div class='eyebrow'>Links</div><h2>Submission slots</h2>
 <table class='mono'><tr><td class='dim'>Viewer link</td><td>[HOSTED LINK: added after approval to publish]</td></tr>

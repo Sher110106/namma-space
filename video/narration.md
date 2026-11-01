@@ -6,11 +6,11 @@ Never type a number here: add a placeholder and a formatter in `nsvideo.py`.
 
 ## cold
 Screen: real viewer recording. First-person walk, key overlay, minimap, a wall stop.
-Say: Built from one phone video. Running in a browser. Nothing to install. This is a Gaussian-splat copy of a room. I walk with the keyboard, and the wall stops me. This dry run uses a public room, MuSHRoom honka. The final cut uses our own room.
+Say: Built from phone video. Running in a browser. Nothing to install. This is a Gaussian-splat copy of a room. I walk with the keyboard, and the wall stops me. {intro_room_sentence}
 
 ## title
 Screen: title card, then scope card.
-Say: Namma Space. One phone video. One command. A room you can walk through. Round 1 covers one indoor room. We did not build multiple floors, WebXR AR, or plan registration. This is a dry run on a public room: MuSHRoom honka, under CC BY 4.0.
+Say: Namma Space. One phone video. One command. A room you can walk through. Round 1 covers one indoor room. We did not build multiple floors, WebXR AR, or plan registration. {title_room_sentence}
 
 ## capture
 Screen: capture slides, then the capture footage ({capture_label}).

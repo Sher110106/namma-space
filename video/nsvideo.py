@@ -113,6 +113,13 @@ def load_values(run: str) -> dict:
         check_sentence = f"The capture check on this clip said {str(status).lower()}." if status else "The capture check ran on this clip."
     else:
         check_sentence = "This public room came as frames, so the capture check did not run."
+    is_public = scene.get("provenance", {}).get("kind") == "public"
+    vids = [i for i in (rep["frames"].get("inputs") or []) if i.get("kind") == "video"]
+    n_vids = len(vids)
+    if not is_public and not chk.exists():
+        check_sentence = "We skipped the capture check for this run: our clips were shorter than its 45 second rule."
+    resc = (rep.get("align", {}).get("scale") or {})
+    rescaled = bool(resc.get("user_factor")) and bool(resc.get("checked_against"))
     V = dict(
         run=run, n_kept=str(n_kept), n_input=str(n_input), sfm_variant=sfm["name"], sfm_reg=pct(100 * sfm["reg_frac"]),
         up_resid=f"{rep['align']['up_resid_deg']:.1f}", scale_value=f"{sc['value']:.3f} metres per model unit", scale_pct=f"{sc['pct_68']:.1f}%",
@@ -124,8 +131,14 @@ def load_values(run: str) -> dict:
         honka_ours_f=r["honka"]["f_ours"], vr_ours_f=r["vr"]["f_ours"], honka_lidar_f=r["honka"]["f_lidar"], vr_lidar_f=r["vr"]["f_lidar"],
         honka_depth=r["honka"]["depth"], vr_depth=r["vr"]["depth"], mip_psnr=r["mip"][:-3], mip_pub=r["mip_pub"][:-3],
         fps=r["fps"], p95=r["p95"], bench_secs="10", check_sentence=check_sentence,
-        capture_label="our capture, shown at 4x" if has_clip else f"public room capture, {n_kept} kept frames, played at {FLY_FPS} frames per second",
-        capture_sentence="This is our own capture, sped up four times." if has_clip else f"Here is the public room: the {n_kept} frames the pipeline kept, played at {FLY_FPS} frames per second.",
+        capture_label="our capture, shown at 4x" if has_clip else (f"public room capture, {n_kept} kept frames, played at {FLY_FPS} frames per second" if is_public else f"our capture: {n_kept} kept frames from {n_vids} clips, played at {FLY_FPS} frames per second"),
+        capture_sentence="This is our own capture, sped up four times." if has_clip else (f"Here is the public room: the {n_kept} frames the pipeline kept, played at {FLY_FPS} frames per second." if is_public else f"Here is our capture: the {n_kept} frames the pipeline kept from our {n_vids} clips, played at {FLY_FPS} frames per second."),
+        intro_room_sentence="This dry run uses a public room, MuSHRoom honka. The final cut uses our own room." if is_public else f"This is our own meeting room, filmed in {n_vids} short clips on an iPhone.",
+        title_room_sentence="This is a dry run on a public room: MuSHRoom honka, under CC BY 4.0." if is_public else f"This build uses our own room, from {n_vids} short phone clips.",
+        foot="Dry run on a public room: MuSHRoom honka, CC BY 4.0" if is_public else "Our own room: Team Quad, TM-5B98573B355",
+        room_word="This public room" if is_public else "Our room",
+        scale_limit=(f"Scale: from camera height, then corrected x{float(resc['user_factor']):.2f} with our rough room sizes (not a tape)" if rescaled else f"Scale: from camera height, {resc.get('pct_68', 0):.1f}% interval, not checked by tape"),
+        n_vids=str(n_vids),
         room_label=scene.get("provenance", {}).get("source", run) if scene.get("provenance", {}).get("kind") == "public" else "our own room",
         has_clip=has_clip, clip=str(clip), places=len(scene.get("places") or []),
         res=r)
@@ -133,7 +146,7 @@ def load_values(run: str) -> dict:
     first_s = dev.get("first_frame_s")
     chk_time = st.get("check")
     V["arch"] = [
-        dict(name="Phone", tool="one video, one lens", time="1 video"),
+        dict(name="Phone", tool="one phone, one lens", time=(f"{V['n_vids']} videos" if int(V["n_vids"]) > 1 else "1 video")),
         dict(name="Check", tool="ns check: pass, warn, fail", time=t_short(chk_time) if chk_time else "not run: frames input", skip=not chk_time),
         dict(name="Frames", tool="ffmpeg, OpenCV: sharp, distinct", time=t_short(st["ingest"])),
         dict(name="SfM race", tool=tool(), time=t_short(st["sfm"])),
