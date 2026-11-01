@@ -46,6 +46,7 @@ CAP = 450
 CAP_TAKE_B = 600
 MIN_DURATION_S = 45.0
 MIN_FRAMES = 60
+TAKE_GAP_S = 60.0  # time gap inserted between takes in frames.json
 WARN_FRAMES = 120
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".mkv", ".avi", ".webm", ".mts", ".3gp"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
@@ -345,7 +346,7 @@ def ingest_video(path: str, work: str, long_side: int, cap: int, min_duration: f
     m = measure_many(files)
     sharp = [x[0] for x in m]
     thumbs = [x[1] for x in m]
-    sel = select_frames(ts, sharp, thumbs, cap=10 ** 9)  # thinning happens after all takes are joined
+    sel = select_frames(ts, sharp, thumbs, cap=10 ** 9, window=WINDOW)  # thinning happens after all takes are joined
     log(f"{probe['file']}: {len(files)} candidates, {sel.n_windows} windows, kept {len(sel.kept)} "
         f"(blur {sel.dropped['blur']}, dup {sel.dropped['dup']}); decode {t_dec - t0:.0f} s, measure {time.time() - t_dec:.0f} s")
     return {"probe": probe, "cand_dir": cand, "files": files, "sel": sel, "hdr_mode": hdr_mode,
@@ -490,6 +491,7 @@ def _run(mode: str, items: List[str], work: str, cap: int, long_side: int, min_d
     size = None
 
     if mode == "video":
+        t_offset = 0.0  # later takes start after the previous one plus a gap, so t never goes back
         for v in items:
             r = ingest_video(v, work, long_side, cap, min_duration, force, log, tonemap)
             p, sel = r["probe"], r["sel"]
@@ -500,7 +502,8 @@ def _run(mode: str, items: List[str], work: str, cap: int, long_side: int, min_d
             for dw in sel.dropped_windows:
                 dropped_ranges.append({"src": p["file"], **dw})
             for k in sel.kept:
-                entries.append((r["files"][k["cand_index"]], {"t": round(k["t"], 3), "sharp": round(k["sharp"], 2), "src": p["file"]}))
+                entries.append((r["files"][k["cand_index"]], {"t": round(k["t"] + t_offset, 3), "sharp": round(k["sharp"], 2), "src": p["file"]}))
+            t_offset += float(p["duration_s"] or 0.0) + TAKE_GAP_S
             inputs.append({"file": p["file"], "kind": "video", "duration_s": p["duration_s"], "width": p["display_width"],
                            "height": p["display_height"], "codec": p["codec"], "avg_fps": p["avg_fps"], "vfr": p["vfr"],
                            "rotation_cw_deg": p["rotation_cw_deg"], "hdr": p["hdr"], "n_cand": sel.n_cand,

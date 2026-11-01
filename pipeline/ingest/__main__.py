@@ -28,12 +28,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--max-frames", type=int, default=None, help=f"cap on kept frames (default {stage.CAP}; 600 with --take-b)")
     ap.add_argument("--take-b", action="store_true", help=f"take B allowance: cap {stage.CAP_TAKE_B}")
     ap.add_argument("--long-side", type=int, default=stage.LONG_SIDE, help="longest image side in px (default 1920)")
+    ap.add_argument("--window", type=int, default=None, help=f"keep the sharpest frame of each N candidates at {stage.SAMPLE_FPS} fps (default {stage.WINDOW}; 2 doubles the frames for short clips)")
     ap.add_argument("--min-duration", type=float, default=stage.MIN_DURATION_S, help="shortest video in seconds (default 45)")
     ap.add_argument("--force", action="store_true", help="carry on with a short video or few frames (warnings only)")
     ap.add_argument("--tonemap", choices=["auto", "zscale", "numpy"], default="auto", help="HDR tone map path (default: zscale if ffmpeg has it)")
     ap.add_argument("--min-free-gb", type=float, default=3.0, help="refuse to start below this much free disk (default 3)")
     ap.add_argument("--keep-candidates", action="store_true", help="keep the candidate JPEGs (scratch) in 10_frames/")
     a = ap.parse_args(argv)
+    if a.window:
+        stage.WINDOW = a.window
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         print("ingest: ffmpeg/ffprobe not found", file=sys.stderr)
         return stage.EXIT_INFRA
