@@ -58,6 +58,14 @@ def first(d: Any, *keys, default=None):
     return default
 
 
+def _read_json_safe(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 class Builder:
     def __init__(self, run: Path) -> None:
         self.run = run
@@ -171,6 +179,12 @@ class Builder:
             if out["align"]["scale"][k] is None:
                 self.missing[f"align.scale.{k}"] = f"{SOURCES['align']} not found" if not self.have("align") \
                     else f"{SOURCES['align']} has no scale.{k}"
+        resc = _read_json_safe(os.path.join(self.run, "40_align", "rescale.json")) if hasattr(self, "run") else None
+        if resc and resc.get("checked_against"):
+            # a user rescale checked against measured or rough sizes (ns rescale) is recorded in rescale.json
+            out["align"]["scale"]["checked_against"] = resc["checked_against"]
+            out["align"]["scale"]["user_factor"] = resc.get("factor_total")
+            out["align"]["scale"]["check"] = resc.get("validation")
         if out["align"]["scale"]["checked_against"] is None:
             self.missing["align.scale.checked_against"] = "n/a: no tape measure given" if not mea else \
                 ("n/a: align stage has not run" if not self.have("align") else "no comparison against the tape measure recorded")

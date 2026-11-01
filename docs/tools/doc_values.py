@@ -109,8 +109,17 @@ def build(run: str, args: argparse.Namespace) -> dict:
     bm = bench_test.get("metrics") or {}
 
     probe = ((rep["input"].get("check") or {}).get("probe") or {})
-    if probe.get("duration_s"):
+    vids = [i for i in (rep["frames"].get("inputs") or []) if i.get("kind") == "video"]
+    if len(vids) > 1:
+        # several takes joined into one reconstruction
+        tot = sum(float(i.get("duration_s") or 0) for i in vids)
+        i0 = vids[0]
+        capture = f'{len(vids)} videos, {hms(tot)} in total, {i0["width"]}x{i0["height"]} at {float(i0["avg_fps"]):.0f} fps'
+    elif probe.get("duration_s"):
         capture = f'{hms(probe["duration_s"])} at {probe["display_width"]}x{probe["display_height"]}, {probe["avg_fps"]:.0f} fps'
+    elif vids:
+        i0 = vids[0]
+        capture = f'{hms(float(i0.get("duration_s") or 0))} at {i0["width"]}x{i0["height"]}, {float(i0["avg_fps"]):.0f} fps'
     else:
         sizes = ", ".join(f"{k}" for k in rep["frames"]["inputs"][0]["sizes"])
         capture = f'frame folder ({rep["frames"]["n_cand"]} frames, {sizes} px)'

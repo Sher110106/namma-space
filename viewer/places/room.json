@@ -1,0 +1,146 @@
+[
+  {
+    "id": "meeting-table",
+    "name": "Meeting table",
+    "aliases": [
+      "table",
+      "desk",
+      "conference table"
+    ],
+    "kind": "item",
+    "position": [
+      0.5664,
+      0.76,
+      0.4608
+    ],
+    "yaw_deg": 72.5,
+    "radius_m": 1.28,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  },
+  {
+    "id": "monitor",
+    "name": "Monitor",
+    "aliases": [
+      "screen",
+      "display",
+      "tv"
+    ],
+    "kind": "item",
+    "position": [
+      0.2376,
+      1.0528,
+      -0.2072
+    ],
+    "yaw_deg": 41,
+    "radius_m": 1.04,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  },
+  {
+    "id": "laptop-and-controllers",
+    "name": "Laptop and controllers",
+    "aliases": [
+      "laptop",
+      "game controllers",
+      "gamepads"
+    ],
+    "kind": "item",
+    "position": [
+      -0.0216,
+      0.7752,
+      -0.0064
+    ],
+    "yaw_deg": 41,
+    "radius_m": 0.8,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  },
+  {
+    "id": "chairs",
+    "name": "Chairs",
+    "aliases": [
+      "seats",
+      "blue chairs",
+      "chair"
+    ],
+    "kind": "item",
+    "position": [
+      -0.36,
+      0.4448,
+      0.3976
+    ],
+    "yaw_deg": 22.1,
+    "radius_m": 1.28,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  },
+  {
+    "id": "whiteboard-left-wall",
+    "name": "Whiteboard, left wall",
+    "aliases": [
+      "board",
+      "whiteboard",
+      "left board"
+    ],
+    "kind": "item",
+    "position": [
+      -0.9832,
+      1.128,
+      1.2376
+    ],
+    "yaw_deg": 41,
+    "radius_m": 1.6,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  },
+  {
+    "id": "whiteboard-far-wall",
+    "name": "Whiteboard, far wall",
+    "aliases": [
+      "board",
+      "whiteboard",
+      "far board"
+    ],
+    "kind": "item",
+    "position": [
+      -0.8712,
+      1.12,
+      -1.7448
+    ],
+    "yaw_deg": 0,
+    "radius_m": 1.6,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  },
+  {
+    "id": "whiteboard-right-wall",
+    "name": "Whiteboard, right wall",
+    "aliases": [
+      "board",
+      "whiteboard",
+      "right board"
+    ],
+    "kind": "item",
+    "position": [
+      1.6528,
+      1.2064,
+      -1.0736
+    ],
+    "yaw_deg": 262,
+    "radius_m": 1.6,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  },
+  {
+    "id": "glass-door-to-balcony",
+    "name": "Glass door to balcony",
+    "aliases": [
+      "door",
+      "exit",
+      "balcony door"
+    ],
+    "kind": "item",
+    "position": [
+      0.5056,
+      1.0688,
+      2.0192
+    ],
+    "yaw_deg": 180,
+    "radius_m": 1.12,
+    "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+  }
+]
