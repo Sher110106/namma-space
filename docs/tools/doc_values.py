@@ -45,7 +45,10 @@ def hms(seconds: float) -> str:
 
 def slot(text: str, is_slot: bool) -> str:
     esc = html.escape(text)
-    return f'<span class="slot">{esc}</span>' if is_slot else esc
+    if is_slot:
+        return f'<span class="slot">{esc}</span>'
+    # real links are clickable in the PDF
+    return f'<a href="{esc}">{esc}</a>' if text.startswith(("http://", "https://")) else esc
 
 
 def room_eval(tag: str) -> dict:
