@@ -1,0 +1,17 @@
+{
+  "default": "room",
+  "scenes": [
+    {
+      "name": "honka",
+      "title": "Public test room: MuSHRoom honka"
+    },
+    {
+      "name": "vr-room",
+      "title": "Public test room: MuSHRoom vr_room"
+    },
+    {
+      "name": "room",
+      "title": "Team Quad's room"
+    }
+  ]
+}

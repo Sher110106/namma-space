@@ -1,0 +1,1115 @@
+{
+  "schema": "namma-space/scene@1",
+  "name": "honka",
+  "title": "Public test room: MuSHRoom honka",
+  "provenance": {
+    "kind": "public",
+    "source": "",
+    "license": "CC BY 4.0",
+    "attribution": "MuSHRoom dataset (Ren et al. 2024), honka room, iPhone capture",
+    "captured": "",
+    "manual_steps": []
+  },
+  "frame": {
+    "units": "m",
+    "up": "+y",
+    "floor_y": 0.0,
+    "handedness": "right"
+  },
+  "splats": {
+    "sd": {
+      "url": "splat_sd.spz",
+      "count": 611196,
+      "sh_degree": 2,
+      "bytes": 13327164
+    },
+    "hd": {
+      "url": "splat_hd.spz",
+      "count": 611196,
+      "sh_degree": 3,
+      "bytes": 15709882
+    },
+    "preview": {
+      "url": "splat_preview.spz",
+      "count": 200000,
+      "sh_degree": 0,
+      "bytes": 3368010
+    },
+    "transform": {
+      "position": [
+        0.0,
+        0.028055,
+        0.0
+      ],
+      "quaternion": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": 1.0
+    },
+    "render": {
+      "antialiased": true,
+      "preBlurAmount": 0.0,
+      "blurAmount": 0.3,
+      "maxStdDev": 2.8284271247461903,
+      "clear_color": [
+        124,
+        119,
+        115
+      ],
+      "clear_color_source": "mean of 8 held-out photos"
+    }
+  },
+  "camera": {
+    "eye_height": 1.4,
+    "fov_y_deg": 70,
+    "near": 0.05,
+    "far": 50,
+    "walk_mps": 1.4,
+    "run_mult": 2.0
+  },
+  "spawn": {
+    "position": [
+      1.065,
+      1.4,
+      -1.427
+    ],
+    "yaw_deg": 148.09,
+    "pitch_deg": -5.0
+  },
+  "bounds": {
+    "min": [
+      -5.332,
+      -0.151,
+      -2.561
+    ],
+    "max": [
+      3.133,
+      2.658,
+      3.765
+    ]
+  },
+  "grid": {
+    "url": "grid.png",
+    "origin_xz": [
+      -4.9,
+      -3.95
+    ],
+    "cell": 0.05,
+    "width": 193,
+    "height": 156,
+    "row0": "min_z",
+    "values": {
+      "walkable": 255,
+      "floor": 128,
+      "blocked": 0
+    }
+  },
+  "minimap": {
+    "url": "minimap.png",
+    "origin_xz": [
+      -4.9,
+      -3.95
+    ],
+    "px_per_m": 40
+  },
+  "bookmarks": [
+    {
+      "id": "v1",
+      "name": "View 1",
+      "position": [
+        -1.743,
+        1.4,
+        1.108
+      ],
+      "yaw_deg": -75.94,
+      "pitch_deg": -5.0
+    },
+    {
+      "id": "v2",
+      "name": "View 2",
+      "position": [
+        1.411,
+        1.4,
+        -1.189
+      ],
+      "yaw_deg": 65.57,
+      "pitch_deg": -8.21
+    },
+    {
+      "id": "v3",
+      "name": "View 3",
+      "position": [
+        1.605,
+        1.4,
+        0.38
+      ],
+      "yaw_deg": 83.48,
+      "pitch_deg": -5.0
+    },
+    {
+      "id": "v4",
+      "name": "View 4",
+      "position": [
+        -0.32,
+        1.4,
+        1.102
+      ],
+      "yaw_deg": -58.19,
+      "pitch_deg": -11.41
+    },
+    {
+      "id": "v5",
+      "name": "View 5",
+      "position": [
+        -1.067,
+        1.4,
+        -1.619
+      ],
+      "yaw_deg": -97.14,
+      "pitch_deg": -9.53
+    }
+  ],
+  "tour": [
+    {
+      "position": [
+        1.065,
+        1.4,
+        -1.427
+      ],
+      "yaw_deg": 144.29,
+      "pitch_deg": 0.0,
+      "t": 0.0
+    },
+    {
+      "position": [
+        0.718,
+        1.4,
+        -1.493
+      ],
+      "yaw_deg": 149.64,
+      "pitch_deg": 0.0,
+      "t": 1.0
+    },
+    {
+      "position": [
+        0.371,
+        1.4,
+        -1.563
+      ],
+      "yaw_deg": -150.36,
+      "pitch_deg": 0.0,
+      "t": 2.0
+    },
+    {
+      "position": [
+        0.025,
+        1.4,
+        -1.633
+      ],
+      "yaw_deg": -90.36,
+      "pitch_deg": 0.0,
+      "t": 3.0
+    },
+    {
+      "position": [
+        -0.321,
+        1.4,
+        -1.703
+      ],
+      "yaw_deg": -74.3,
+      "pitch_deg": 0.0,
+      "t": 4.0
+    },
+    {
+      "position": [
+        -0.668,
+        1.4,
+        -1.771
+      ],
+      "yaw_deg": -81.68,
+      "pitch_deg": 0.0,
+      "t": 5.0
+    },
+    {
+      "position": [
+        -1.016,
+        1.4,
+        -1.833
+      ],
+      "yaw_deg": -88.61,
+      "pitch_deg": 0.0,
+      "t": 6.0
+    },
+    {
+      "position": [
+        -1.154,
+        1.4,
+        -1.793
+      ],
+      "yaw_deg": -92.94,
+      "pitch_deg": 0.0,
+      "t": 7.0
+    },
+    {
+      "position": [
+        -0.82,
+        1.4,
+        -1.68
+      ],
+      "yaw_deg": -94.52,
+      "pitch_deg": 0.0,
+      "t": 8.0
+    },
+    {
+      "position": [
+        -0.483,
+        1.4,
+        -1.573
+      ],
+      "yaw_deg": -95.84,
+      "pitch_deg": 0.0,
+      "t": 9.0
+    },
+    {
+      "position": [
+        -0.147,
+        1.4,
+        -1.463
+      ],
+      "yaw_deg": -100.79,
+      "pitch_deg": 0.0,
+      "t": 10.0
+    },
+    {
+      "position": [
+        0.186,
+        1.4,
+        -1.346
+      ],
+      "yaw_deg": -113.04,
+      "pitch_deg": 0.0,
+      "t": 11.0
+    },
+    {
+      "position": [
+        0.514,
+        1.4,
+        -1.215
+      ],
+      "yaw_deg": -132.06,
+      "pitch_deg": 0.0,
+      "t": 12.0
+    },
+    {
+      "position": [
+        0.82,
+        1.4,
+        -1.04
+      ],
+      "yaw_deg": -150.55,
+      "pitch_deg": 0.0,
+      "t": 13.0
+    },
+    {
+      "position": [
+        1.067,
+        1.4,
+        -0.79
+      ],
+      "yaw_deg": -162.91,
+      "pitch_deg": 0.0,
+      "t": 14.0
+    },
+    {
+      "position": [
+        1.204,
+        1.4,
+        -0.466
+      ],
+      "yaw_deg": -169.67,
+      "pitch_deg": 0.0,
+      "t": 15.0
+    },
+    {
+      "position": [
+        1.238,
+        1.4,
+        -0.115
+      ],
+      "yaw_deg": -173.22,
+      "pitch_deg": 0.0,
+      "t": 16.0
+    },
+    {
+      "position": [
+        1.19,
+        1.4,
+        0.233
+      ],
+      "yaw_deg": -176.41,
+      "pitch_deg": 0.0,
+      "t": 17.0
+    },
+    {
+      "position": [
+        0.952,
+        1.4,
+        0.48
+      ],
+      "yaw_deg": 177.04,
+      "pitch_deg": 0.0,
+      "t": 18.0
+    },
+    {
+      "position": [
+        0.639,
+        1.4,
+        0.643
+      ],
+      "yaw_deg": 163.14,
+      "pitch_deg": 0.0,
+      "t": 19.0
+    },
+    {
+      "position": [
+        0.314,
+        1.4,
+        0.782
+      ],
+      "yaw_deg": 140.43,
+      "pitch_deg": 0.0,
+      "t": 20.0
+    },
+    {
+      "position": [
+        -0.014,
+        1.4,
+        0.914
+      ],
+      "yaw_deg": 114.41,
+      "pitch_deg": 0.0,
+      "t": 21.0
+    },
+    {
+      "position": [
+        -0.344,
+        1.4,
+        1.04
+      ],
+      "yaw_deg": 90.47,
+      "pitch_deg": 0.0,
+      "t": 22.0
+    },
+    {
+      "position": [
+        -0.676,
+        1.4,
+        1.162
+      ],
+      "yaw_deg": 64.76,
+      "pitch_deg": 0.0,
+      "t": 23.0
+    },
+    {
+      "position": [
+        -0.376,
+        1.4,
+        1.051
+      ],
+      "yaw_deg": 27.25,
+      "pitch_deg": 0.0,
+      "t": 24.0
+    },
+    {
+      "position": [
+        -0.044,
+        1.4,
+        0.928
+      ],
+      "yaw_deg": -14.49,
+      "pitch_deg": 0.0,
+      "t": 25.0
+    },
+    {
+      "position": [
+        0.284,
+        1.4,
+        0.798
+      ],
+      "yaw_deg": -36.88,
+      "pitch_deg": 0.0,
+      "t": 26.0
+    },
+    {
+      "position": [
+        0.609,
+        1.4,
+        0.659
+      ],
+      "yaw_deg": -43.73,
+      "pitch_deg": 0.0,
+      "t": 27.0
+    },
+    {
+      "position": [
+        0.923,
+        1.4,
+        0.498
+      ],
+      "yaw_deg": -40.46,
+      "pitch_deg": 0.0,
+      "t": 28.0
+    },
+    {
+      "position": [
+        1.146,
+        1.4,
+        0.235
+      ],
+      "yaw_deg": -28.66,
+      "pitch_deg": 0.0,
+      "t": 29.0
+    },
+    {
+      "position": [
+        1.214,
+        1.4,
+        -0.111
+      ],
+      "yaw_deg": -9.77,
+      "pitch_deg": 0.0,
+      "t": 30.0
+    },
+    {
+      "position": [
+        1.222,
+        1.4,
+        -0.464
+      ],
+      "yaw_deg": 11.12,
+      "pitch_deg": 0.0,
+      "t": 31.0
+    },
+    {
+      "position": [
+        1.101,
+        1.4,
+        -0.788
+      ],
+      "yaw_deg": 26.17,
+      "pitch_deg": 0.0,
+      "t": 32.0
+    },
+    {
+      "position": [
+        0.825,
+        1.4,
+        -1.007
+      ],
+      "yaw_deg": 29.65,
+      "pitch_deg": 0.0,
+      "t": 33.0
+    },
+    {
+      "position": [
+        0.527,
+        1.4,
+        -1.197
+      ],
+      "yaw_deg": 15.31,
+      "pitch_deg": 0.0,
+      "t": 34.0
+    },
+    {
+      "position": [
+        0.216,
+        1.4,
+        -1.364
+      ],
+      "yaw_deg": -28.08,
+      "pitch_deg": 0.0,
+      "t": 35.0
+    },
+    {
+      "position": [
+        -0.101,
+        1.4,
+        -1.522
+      ],
+      "yaw_deg": -76.65,
+      "pitch_deg": 0.0,
+      "t": 36.0
+    },
+    {
+      "position": [
+        0.153,
+        1.4,
+        -1.399
+      ],
+      "yaw_deg": -109.47,
+      "pitch_deg": 0.0,
+      "t": 37.0
+    },
+    {
+      "position": [
+        0.467,
+        1.4,
+        -1.237
+      ],
+      "yaw_deg": -134.96,
+      "pitch_deg": 0.0,
+      "t": 38.0
+    },
+    {
+      "position": [
+        0.77,
+        1.4,
+        -1.056
+      ],
+      "yaw_deg": -153.37,
+      "pitch_deg": 0.0,
+      "t": 39.0
+    },
+    {
+      "position": [
+        1.025,
+        1.4,
+        -0.814
+      ],
+      "yaw_deg": -164.65,
+      "pitch_deg": 0.0,
+      "t": 40.0
+    },
+    {
+      "position": [
+        1.181,
+        1.4,
+        -0.5
+      ],
+      "yaw_deg": -170.8,
+      "pitch_deg": 0.0,
+      "t": 41.0
+    },
+    {
+      "position": [
+        1.23,
+        1.4,
+        -0.15
+      ],
+      "yaw_deg": -174.22,
+      "pitch_deg": 0.0,
+      "t": 42.0
+    },
+    {
+      "position": [
+        1.201,
+        1.4,
+        0.201
+      ],
+      "yaw_deg": -177.6,
+      "pitch_deg": 0.0,
+      "t": 43.0
+    },
+    {
+      "position": [
+        0.984,
+        1.4,
+        0.465
+      ],
+      "yaw_deg": 175.33,
+      "pitch_deg": 0.0,
+      "t": 44.0
+    },
+    {
+      "position": [
+        0.664,
+        1.4,
+        0.614
+      ],
+      "yaw_deg": 160.33,
+      "pitch_deg": 0.0,
+      "t": 45.0
+    },
+    {
+      "position": [
+        0.329,
+        1.4,
+        0.726
+      ],
+      "yaw_deg": 136.99,
+      "pitch_deg": 0.0,
+      "t": 46.0
+    },
+    {
+      "position": [
+        -0.01,
+        1.4,
+        0.826
+      ],
+      "yaw_deg": 114.6,
+      "pitch_deg": 0.0,
+      "t": 47.0
+    },
+    {
+      "position": [
+        -0.35,
+        1.4,
+        0.921
+      ],
+      "yaw_deg": 100.81,
+      "pitch_deg": 0.0,
+      "t": 48.0
+    },
+    {
+      "position": [
+        -0.691,
+        1.4,
+        1.015
+      ],
+      "yaw_deg": 95.1,
+      "pitch_deg": 0.0,
+      "t": 49.0
+    },
+    {
+      "position": [
+        -1.032,
+        1.4,
+        1.107
+      ],
+      "yaw_deg": 94.71,
+      "pitch_deg": 0.0,
+      "t": 50.0
+    },
+    {
+      "position": [
+        -1.372,
+        1.4,
+        1.202
+      ],
+      "yaw_deg": 96.29,
+      "pitch_deg": 0.0,
+      "t": 51.0
+    },
+    {
+      "position": [
+        -1.704,
+        1.4,
+        1.32
+      ],
+      "yaw_deg": 96.19,
+      "pitch_deg": 0.0,
+      "t": 52.0
+    },
+    {
+      "position": [
+        -1.361,
+        1.4,
+        1.305
+      ],
+      "yaw_deg": 92.1,
+      "pitch_deg": 0.0,
+      "t": 53.0
+    },
+    {
+      "position": [
+        -1.011,
+        1.4,
+        1.256
+      ],
+      "yaw_deg": 83.18,
+      "pitch_deg": 0.0,
+      "t": 54.0
+    },
+    {
+      "position": [
+        -0.662,
+        1.4,
+        1.201
+      ],
+      "yaw_deg": 67.12,
+      "pitch_deg": 0.0,
+      "t": 55.0
+    },
+    {
+      "position": [
+        -0.313,
+        1.4,
+        1.145
+      ],
+      "yaw_deg": 26.53,
+      "pitch_deg": 0.0,
+      "t": 56.0
+    },
+    {
+      "position": [
+        0.036,
+        1.4,
+        1.089
+      ],
+      "yaw_deg": -33.47,
+      "pitch_deg": 0.0,
+      "t": 57.0
+    },
+    {
+      "position": [
+        0.385,
+        1.4,
+        1.032
+      ],
+      "yaw_deg": -70.14,
+      "pitch_deg": 0.0,
+      "t": 58.0
+    },
+    {
+      "position": [
+        0.734,
+        1.4,
+        0.977
+      ],
+      "yaw_deg": -79.54,
+      "pitch_deg": 0.0,
+      "t": 59.0
+    },
+    {
+      "position": [
+        1.083,
+        1.4,
+        0.924
+      ],
+      "yaw_deg": -83.8,
+      "pitch_deg": 0.0,
+      "t": 60.0
+    }
+  ],
+  "heldout": [
+    {
+      "id": "000001",
+      "photo": "heldout/000001.jpg",
+      "position": [
+        -0.8732,
+        1.4482,
+        -1.78
+      ],
+      "quaternion": [
+        -0.100081,
+        -0.741662,
+        -0.121141,
+        0.65211
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 20.3
+    },
+    {
+      "id": "000049",
+      "photo": "heldout/000049.jpg",
+      "position": [
+        0.6075,
+        1.3918,
+        1.5846
+      ],
+      "quaternion": [
+        -0.131514,
+        -0.537873,
+        -0.090836,
+        0.827735
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 22.18
+    },
+    {
+      "id": "000100",
+      "photo": "heldout/000100.jpg",
+      "position": [
+        -1.808,
+        1.3597,
+        1.2442
+      ],
+      "quaternion": [
+        -0.166203,
+        -0.645585,
+        -0.157686,
+        0.728513
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 22.44
+    },
+    {
+      "id": "000151",
+      "photo": "heldout/000151.jpg",
+      "position": [
+        1.7533,
+        1.3928,
+        1.0312
+      ],
+      "quaternion": [
+        -0.088722,
+        -0.803241,
+        -0.132659,
+        0.573876
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 21.91
+    },
+    {
+      "id": "000191",
+      "photo": "heldout/000191.jpg",
+      "position": [
+        1.5067,
+        1.5954,
+        -1.698
+      ],
+      "quaternion": [
+        0.003596,
+        -0.612145,
+        -0.008528,
+        0.790691
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 27.15
+    },
+    {
+      "id": "000239",
+      "photo": "heldout/000239.jpg",
+      "position": [
+        -2.4011,
+        1.2639,
+        -1.724
+      ],
+      "quaternion": [
+        -0.089084,
+        0.894266,
+        0.213193,
+        0.383278
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 22.35
+    },
+    {
+      "id": "000282",
+      "photo": "heldout/000282.jpg",
+      "position": [
+        1.3444,
+        1.3452,
+        0.1151
+      ],
+      "quaternion": [
+        -0.053839,
+        0.883805,
+        0.104619,
+        0.452819
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 21.72
+    },
+    {
+      "id": "000331",
+      "photo": "heldout/000331.jpg",
+      "position": [
+        -0.4844,
+        1.5017,
+        1.1472
+      ],
+      "quaternion": [
+        -0.086879,
+        -0.405163,
+        -0.04848,
+        0.908815
+      ],
+      "fov_y_deg": 62.8418,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.74242,
+      "psnr": 22.83
+    }
+  ],
+  "places": [
+    {
+      "id": "meeting-table",
+      "name": "Meeting table",
+      "aliases": [
+        "long table",
+        "conference table",
+        "table",
+        "desk"
+      ],
+      "kind": "item",
+      "position": [
+        -0.402,
+        0.718,
+        -0.492
+      ],
+      "yaw_deg": -172.7,
+      "radius_m": 0.808,
+      "notes": "placed by hand with the place editor (build team), 30 Oct; moved into this run's frame from rh-honka.json by the camera fit (scale 1.0098, yaw -179.8 deg, median camera residual 0.1 cm)"
+    },
+    {
+      "id": "wall-tv",
+      "name": "Wall TV",
+      "aliases": [
+        "tv",
+        "television",
+        "screen",
+        "display",
+        "monitor"
+      ],
+      "kind": "item",
+      "position": [
+        -3.362,
+        1.174,
+        -0.152
+      ],
+      "yaw_deg": 90.2,
+      "radius_m": 1.01,
+      "notes": "placed by hand with the place editor (build team), 30 Oct; the pin is on the soundbar under the screen, because the screen reflects the room and gives no depth; moved into this run's frame from rh-honka.json by the camera fit (scale 1.0098, yaw -179.8 deg, median camera residual 0.1 cm)"
+    },
+    {
+      "id": "forest-picture",
+      "name": "Forest picture",
+      "aliases": [
+        "forest",
+        "mural",
+        "painting",
+        "picture",
+        "wall art"
+      ],
+      "kind": "item",
+      "position": [
+        0.843,
+        1.514,
+        -2.33
+      ],
+      "yaw_deg": 59.4,
+      "radius_m": 0.808,
+      "notes": "placed by hand with the place editor (build team), 30 Oct; moved into this run's frame from rh-honka.json by the camera fit (scale 1.0098, yaw -179.8 deg, median camera residual 0.1 cm)"
+    },
+    {
+      "id": "drinks-shelf",
+      "name": "Drinks shelf",
+      "aliases": [
+        "drinks",
+        "coffee",
+        "snacks",
+        "counter",
+        "shelf",
+        "kitchenette"
+      ],
+      "kind": "item",
+      "position": [
+        2.699,
+        0.807,
+        0.094
+      ],
+      "yaw_deg": -82.0,
+      "radius_m": 0.404,
+      "notes": "placed by hand with the place editor (build team), 30 Oct; moved into this run's frame from rh-honka.json by the camera fit (scale 1.0098, yaw -179.8 deg, median camera residual 0.1 cm)"
+    },
+    {
+      "id": "door",
+      "name": "Door",
+      "aliases": [
+        "exit",
+        "entrance",
+        "glass door",
+        "honka door"
+      ],
+      "kind": "item",
+      "position": [
+        2.345,
+        1.416,
+        2.028
+      ],
+      "yaw_deg": 164.8,
+      "radius_m": 0.404,
+      "notes": "placed by hand with the place editor (build team), 30 Oct; moved into this run's frame from rh-honka.json by the camera fit (scale 1.0098, yaw -179.8 deg, median camera residual 0.1 cm)"
+    },
+    {
+      "id": "armchair",
+      "name": "Armchair",
+      "aliases": [
+        "chair",
+        "wooden chair",
+        "black chair",
+        "seat"
+      ],
+      "kind": "item",
+      "position": [
+        -2.828,
+        0.481,
+        1.62
+      ],
+      "yaw_deg": 99.8,
+      "radius_m": 0.404,
+      "notes": "placed by hand with the place editor (build team), 30 Oct; moved into this run's frame from rh-honka.json by the camera fit (scale 1.0098, yaw -179.8 deg, median camera residual 0.1 cm)"
+    }
+  ],
+  "scale": {
+    "value": 0.49190913572785666,
+    "pct_68": 12.749685157937574,
+    "method": "camera_height",
+    "cues": [
+      {
+        "name": "camera_height",
+        "value": 0.49190913572785666,
+        "sigma_log": 0.12,
+        "used": true,
+        "note": "generic 1.40 m / H_cap (no user height)"
+      }
+    ],
+    "checked_against": null
+  },
+  "metrics": {
+    "heldout_n": 8,
+    "psnr": 21.51055335998535,
+    "ssim": 0.8222317695617676,
+    "lpips": 0.21950004994869232,
+    "lpips_net": "alex",
+    "cc_psnr": 25.166296005249023,
+    "sd_psnr": 21.11121873905666
+  },
+  "build": {
+    "git": "b4f84ae-dirty",
+    "pipeline": "0.9.0",
+    "date": "2026-11-01T21:10:38+05:30",
+    "report": "report.json"
+  }
+}

@@ -1,0 +1,1138 @@
+{
+  "schema": "namma-space/scene@1",
+  "name": "room",
+  "title": "Team Quad's room",
+  "provenance": {
+    "kind": "captured",
+    "source": "",
+    "license": "CC BY 4.0",
+    "attribution": "Team Quad (TM-5B98573B355), captured 1 Nov 2026 with an iPhone 14 Pro Max",
+    "captured": "",
+    "manual_steps": []
+  },
+  "frame": {
+    "units": "m",
+    "up": "+y",
+    "floor_y": 0.0,
+    "handedness": "right"
+  },
+  "splats": {
+    "sd": {
+      "url": "splat_sd.spz",
+      "count": 283842,
+      "sh_degree": 3,
+      "bytes": 7140402
+    },
+    "hd": null,
+    "preview": {
+      "url": "splat_preview.spz",
+      "count": 200000,
+      "sh_degree": 0,
+      "bytes": 3198452
+    },
+    "transform": {
+      "position": [
+        0.0,
+        -0.002865,
+        0.0
+      ],
+      "quaternion": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": 0.8
+    },
+    "render": {
+      "antialiased": true,
+      "preBlurAmount": 0.0,
+      "blurAmount": 0.3,
+      "maxStdDev": 2.8284271247461903,
+      "clear_color": [
+        119,
+        120,
+        120
+      ],
+      "clear_color_source": "mean of 8 held-out photos"
+    }
+  },
+  "camera": {
+    "eye_height": 1.2,
+    "fov_y_deg": 70,
+    "near": 0.05,
+    "far": 50,
+    "walk_mps": 1.4,
+    "run_mult": 2.0
+  },
+  "spawn": {
+    "position": [
+      0.76,
+      1.2,
+      -1.766
+    ],
+    "yaw_deg": 147.13,
+    "pitch_deg": -11.49
+  },
+  "bounds": {
+    "min": [
+      -2.02,
+      -0.176,
+      -2.756
+    ],
+    "max": [
+      2.459,
+      2.328,
+      2.552
+    ]
+  },
+  "grid": {
+    "url": "grid.png",
+    "origin_xz": [
+      -3.5,
+      -3.7
+    ],
+    "cell": 0.05,
+    "width": 142,
+    "height": 158,
+    "row0": "min_z",
+    "values": {
+      "walkable": 255,
+      "floor": 128,
+      "blocked": 0
+    }
+  },
+  "minimap": {
+    "url": "minimap.png",
+    "origin_xz": [
+      -3.5,
+      -3.7
+    ],
+    "px_per_m": 40
+  },
+  "bookmarks": [
+    {
+      "id": "v1",
+      "name": "View 1",
+      "position": [
+        -0.657,
+        1.2,
+        0.66
+      ],
+      "yaw_deg": -45.83,
+      "pitch_deg": -12.0
+    },
+    {
+      "id": "v2",
+      "name": "View 2",
+      "position": [
+        -1.089,
+        1.2,
+        -0.875
+      ],
+      "yaw_deg": -97.21,
+      "pitch_deg": -12.0
+    },
+    {
+      "id": "v3",
+      "name": "View 3",
+      "position": [
+        0.463,
+        1.2,
+        1.789
+      ],
+      "yaw_deg": 41.0,
+      "pitch_deg": -12.0
+    },
+    {
+      "id": "v4",
+      "name": "View 4",
+      "position": [
+        0.282,
+        1.2,
+        -1.722
+      ],
+      "yaw_deg": -162.78,
+      "pitch_deg": -12.0
+    },
+    {
+      "id": "v5",
+      "name": "View 5",
+      "position": [
+        1.147,
+        1.2,
+        -0.973
+      ],
+      "yaw_deg": 123.69,
+      "pitch_deg": -12.0
+    }
+  ],
+  "tour": [
+    {
+      "position": [
+        0.76,
+        1.2,
+        -1.766
+      ],
+      "yaw_deg": 152.86,
+      "pitch_deg": 0.0,
+      "t": 0.0
+    },
+    {
+      "position": [
+        0.807,
+        1.2,
+        -1.587
+      ],
+      "yaw_deg": 158.04,
+      "pitch_deg": 0.0,
+      "t": 1.0
+    },
+    {
+      "position": [
+        0.856,
+        1.2,
+        -1.408
+      ],
+      "yaw_deg": 165.13,
+      "pitch_deg": 0.0,
+      "t": 2.0
+    },
+    {
+      "position": [
+        0.906,
+        1.2,
+        -1.23
+      ],
+      "yaw_deg": 173.1,
+      "pitch_deg": 0.0,
+      "t": 3.0
+    },
+    {
+      "position": [
+        0.957,
+        1.2,
+        -1.052
+      ],
+      "yaw_deg": -179.58,
+      "pitch_deg": 0.0,
+      "t": 4.0
+    },
+    {
+      "position": [
+        1.008,
+        1.2,
+        -0.874
+      ],
+      "yaw_deg": -174.2,
+      "pitch_deg": 0.0,
+      "t": 5.0
+    },
+    {
+      "position": [
+        1.059,
+        1.2,
+        -0.696
+      ],
+      "yaw_deg": -171.23,
+      "pitch_deg": 0.0,
+      "t": 6.0
+    },
+    {
+      "position": [
+        1.109,
+        1.2,
+        -0.517
+      ],
+      "yaw_deg": -170.44,
+      "pitch_deg": 0.0,
+      "t": 7.0
+    },
+    {
+      "position": [
+        1.158,
+        1.2,
+        -0.339
+      ],
+      "yaw_deg": -171.33,
+      "pitch_deg": 0.0,
+      "t": 8.0
+    },
+    {
+      "position": [
+        1.204,
+        1.2,
+        -0.16
+      ],
+      "yaw_deg": -173.37,
+      "pitch_deg": 0.0,
+      "t": 9.0
+    },
+    {
+      "position": [
+        1.247,
+        1.2,
+        0.021
+      ],
+      "yaw_deg": -176.2,
+      "pitch_deg": 0.0,
+      "t": 10.0
+    },
+    {
+      "position": [
+        1.285,
+        1.2,
+        0.202
+      ],
+      "yaw_deg": -179.58,
+      "pitch_deg": 0.0,
+      "t": 11.0
+    },
+    {
+      "position": [
+        1.315,
+        1.2,
+        0.385
+      ],
+      "yaw_deg": 176.55,
+      "pitch_deg": 0.0,
+      "t": 12.0
+    },
+    {
+      "position": [
+        1.333,
+        1.2,
+        0.569
+      ],
+      "yaw_deg": 172.03,
+      "pitch_deg": 0.0,
+      "t": 13.0
+    },
+    {
+      "position": [
+        1.345,
+        1.2,
+        0.754
+      ],
+      "yaw_deg": 166.38,
+      "pitch_deg": 0.0,
+      "t": 14.0
+    },
+    {
+      "position": [
+        1.339,
+        1.2,
+        0.939
+      ],
+      "yaw_deg": 158.78,
+      "pitch_deg": 0.0,
+      "t": 15.0
+    },
+    {
+      "position": [
+        1.296,
+        1.2,
+        1.119
+      ],
+      "yaw_deg": 148.4,
+      "pitch_deg": 0.0,
+      "t": 16.0
+    },
+    {
+      "position": [
+        1.211,
+        1.2,
+        1.282
+      ],
+      "yaw_deg": 134.97,
+      "pitch_deg": 0.0,
+      "t": 17.0
+    },
+    {
+      "position": [
+        1.089,
+        1.2,
+        1.421
+      ],
+      "yaw_deg": 119.51,
+      "pitch_deg": 0.0,
+      "t": 18.0
+    },
+    {
+      "position": [
+        0.954,
+        1.2,
+        1.547
+      ],
+      "yaw_deg": 104.0,
+      "pitch_deg": 0.0,
+      "t": 19.0
+    },
+    {
+      "position": [
+        0.815,
+        1.2,
+        1.67
+      ],
+      "yaw_deg": 89.62,
+      "pitch_deg": 0.0,
+      "t": 20.0
+    },
+    {
+      "position": [
+        0.68,
+        1.2,
+        1.796
+      ],
+      "yaw_deg": 76.07,
+      "pitch_deg": 0.0,
+      "t": 21.0
+    },
+    {
+      "position": [
+        0.566,
+        1.2,
+        1.942
+      ],
+      "yaw_deg": 62.87,
+      "pitch_deg": 0.0,
+      "t": 22.0
+    },
+    {
+      "position": [
+        0.489,
+        1.2,
+        2.11
+      ],
+      "yaw_deg": 50.98,
+      "pitch_deg": 0.0,
+      "t": 23.0
+    },
+    {
+      "position": [
+        0.431,
+        1.2,
+        2.286
+      ],
+      "yaw_deg": 42.61,
+      "pitch_deg": 0.0,
+      "t": 24.0
+    },
+    {
+      "position": [
+        0.4,
+        1.2,
+        2.336
+      ],
+      "yaw_deg": 39.3,
+      "pitch_deg": 0.0,
+      "t": 25.0
+    },
+    {
+      "position": [
+        0.456,
+        1.2,
+        2.16
+      ],
+      "yaw_deg": 40.86,
+      "pitch_deg": 0.0,
+      "t": 26.0
+    },
+    {
+      "position": [
+        0.508,
+        1.2,
+        1.982
+      ],
+      "yaw_deg": 45.49,
+      "pitch_deg": 0.0,
+      "t": 27.0
+    },
+    {
+      "position": [
+        0.553,
+        1.2,
+        1.802
+      ],
+      "yaw_deg": 50.47,
+      "pitch_deg": 0.0,
+      "t": 28.0
+    },
+    {
+      "position": [
+        0.581,
+        1.2,
+        1.619
+      ],
+      "yaw_deg": 53.17,
+      "pitch_deg": 0.0,
+      "t": 29.0
+    },
+    {
+      "position": [
+        0.572,
+        1.2,
+        1.436
+      ],
+      "yaw_deg": 51.67,
+      "pitch_deg": 0.0,
+      "t": 30.0
+    },
+    {
+      "position": [
+        0.473,
+        1.2,
+        1.284
+      ],
+      "yaw_deg": 44.65,
+      "pitch_deg": 0.0,
+      "t": 31.0
+    },
+    {
+      "position": [
+        0.319,
+        1.2,
+        1.182
+      ],
+      "yaw_deg": 31.75,
+      "pitch_deg": 0.0,
+      "t": 32.0
+    },
+    {
+      "position": [
+        0.152,
+        1.2,
+        1.102
+      ],
+      "yaw_deg": 15.31,
+      "pitch_deg": 0.0,
+      "t": 33.0
+    },
+    {
+      "position": [
+        -0.018,
+        1.2,
+        1.028
+      ],
+      "yaw_deg": 0.93,
+      "pitch_deg": 0.0,
+      "t": 34.0
+    },
+    {
+      "position": [
+        -0.182,
+        1.2,
+        0.944
+      ],
+      "yaw_deg": -6.96,
+      "pitch_deg": 0.0,
+      "t": 35.0
+    },
+    {
+      "position": [
+        -0.321,
+        1.2,
+        0.823
+      ],
+      "yaw_deg": -7.45,
+      "pitch_deg": 0.0,
+      "t": 36.0
+    },
+    {
+      "position": [
+        -0.423,
+        1.2,
+        0.668
+      ],
+      "yaw_deg": -1.66,
+      "pitch_deg": 0.0,
+      "t": 37.0
+    },
+    {
+      "position": [
+        -0.509,
+        1.2,
+        0.504
+      ],
+      "yaw_deg": 7.82,
+      "pitch_deg": 0.0,
+      "t": 38.0
+    },
+    {
+      "position": [
+        -0.602,
+        1.2,
+        0.344
+      ],
+      "yaw_deg": 17.53,
+      "pitch_deg": 0.0,
+      "t": 39.0
+    },
+    {
+      "position": [
+        -0.695,
+        1.2,
+        0.184
+      ],
+      "yaw_deg": 25.25,
+      "pitch_deg": 0.0,
+      "t": 40.0
+    },
+    {
+      "position": [
+        -0.786,
+        1.2,
+        0.023
+      ],
+      "yaw_deg": 30.87,
+      "pitch_deg": 0.0,
+      "t": 41.0
+    },
+    {
+      "position": [
+        -0.873,
+        1.2,
+        -0.141
+      ],
+      "yaw_deg": 35.86,
+      "pitch_deg": 0.0,
+      "t": 42.0
+    },
+    {
+      "position": [
+        -0.95,
+        1.2,
+        -0.309
+      ],
+      "yaw_deg": 43.43,
+      "pitch_deg": 0.0,
+      "t": 43.0
+    },
+    {
+      "position": [
+        -1.002,
+        1.2,
+        -0.486
+      ],
+      "yaw_deg": 69.08,
+      "pitch_deg": 0.0,
+      "t": 44.0
+    },
+    {
+      "position": [
+        -1.021,
+        1.2,
+        -0.67
+      ],
+      "yaw_deg": 129.08,
+      "pitch_deg": 0.0,
+      "t": 45.0
+    },
+    {
+      "position": [
+        -1.032,
+        1.2,
+        -0.855
+      ],
+      "yaw_deg": -170.92,
+      "pitch_deg": 0.0,
+      "t": 46.0
+    },
+    {
+      "position": [
+        -1.036,
+        1.2,
+        -1.04
+      ],
+      "yaw_deg": -160.96,
+      "pitch_deg": 0.0,
+      "t": 47.0
+    },
+    {
+      "position": [
+        -1.042,
+        1.2,
+        -0.929
+      ],
+      "yaw_deg": -158.85,
+      "pitch_deg": 0.0,
+      "t": 48.0
+    },
+    {
+      "position": [
+        -1.047,
+        1.2,
+        -0.744
+      ],
+      "yaw_deg": -158.49,
+      "pitch_deg": 0.0,
+      "t": 49.0
+    },
+    {
+      "position": [
+        -1.049,
+        1.2,
+        -0.559
+      ],
+      "yaw_deg": -158.9,
+      "pitch_deg": 0.0,
+      "t": 50.0
+    },
+    {
+      "position": [
+        -1.046,
+        1.2,
+        -0.374
+      ],
+      "yaw_deg": -159.45,
+      "pitch_deg": 0.0,
+      "t": 51.0
+    },
+    {
+      "position": [
+        -1.038,
+        1.2,
+        -0.189
+      ],
+      "yaw_deg": -159.61,
+      "pitch_deg": 0.0,
+      "t": 52.0
+    },
+    {
+      "position": [
+        -1.02,
+        1.2,
+        -0.004
+      ],
+      "yaw_deg": -158.66,
+      "pitch_deg": 0.0,
+      "t": 53.0
+    },
+    {
+      "position": [
+        -0.987,
+        1.2,
+        0.178
+      ],
+      "yaw_deg": -155.32,
+      "pitch_deg": 0.0,
+      "t": 54.0
+    },
+    {
+      "position": [
+        -0.926,
+        1.2,
+        0.352
+      ],
+      "yaw_deg": -147.67,
+      "pitch_deg": 0.0,
+      "t": 55.0
+    },
+    {
+      "position": [
+        -0.84,
+        1.2,
+        0.516
+      ],
+      "yaw_deg": -133.15,
+      "pitch_deg": 0.0,
+      "t": 56.0
+    },
+    {
+      "position": [
+        -0.738,
+        1.2,
+        0.67
+      ],
+      "yaw_deg": -110.17,
+      "pitch_deg": 0.0,
+      "t": 57.0
+    },
+    {
+      "position": [
+        -0.628,
+        1.2,
+        0.82
+      ],
+      "yaw_deg": -84.13,
+      "pitch_deg": 0.0,
+      "t": 58.0
+    },
+    {
+      "position": [
+        -0.517,
+        1.2,
+        0.968
+      ],
+      "yaw_deg": -64.4,
+      "pitch_deg": 0.0,
+      "t": 59.0
+    },
+    {
+      "position": [
+        -0.413,
+        1.2,
+        1.121
+      ],
+      "yaw_deg": -52.68,
+      "pitch_deg": 0.0,
+      "t": 60.0
+    }
+  ],
+  "heldout": [
+    {
+      "id": "000001",
+      "photo": "heldout/000001.jpg",
+      "position": [
+        0.3878,
+        1.5903,
+        2.3986
+      ],
+      "quaternion": [
+        -0.130982,
+        0.185372,
+        0.01515,
+        0.973782
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 17.25
+    },
+    {
+      "id": "000041",
+      "photo": "heldout/000041.jpg",
+      "position": [
+        -1.0433,
+        1.5703,
+        -0.3156
+      ],
+      "quaternion": [
+        -0.280677,
+        -0.408982,
+        -0.08347,
+        0.864284
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 26.69
+    },
+    {
+      "id": "000081",
+      "photo": "heldout/000081.jpg",
+      "position": [
+        -0.0397,
+        1.5174,
+        -1.8374
+      ],
+      "quaternion": [
+        -0.203054,
+        -0.891467,
+        -0.355595,
+        0.193929
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 21.86
+    },
+    {
+      "id": "000121",
+      "photo": "heldout/000121.jpg",
+      "position": [
+        1.5456,
+        1.486,
+        1.1741
+      ],
+      "quaternion": [
+        -0.144817,
+        0.589242,
+        0.27599,
+        0.74542
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 24.74
+    },
+    {
+      "id": "000196",
+      "photo": "heldout/000196.jpg",
+      "position": [
+        -0.6096,
+        1.4992,
+        0.4732
+      ],
+      "quaternion": [
+        -0.213247,
+        0.577333,
+        0.247221,
+        0.748395
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 19.4
+    },
+    {
+      "id": "000250",
+      "photo": "heldout/000250.jpg",
+      "position": [
+        -0.9697,
+        1.1753,
+        0.0172
+      ],
+      "quaternion": [
+        -0.190032,
+        -0.360115,
+        -0.028426,
+        0.912906
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 25.12
+    },
+    {
+      "id": "000290",
+      "photo": "heldout/000290.jpg",
+      "position": [
+        0.8486,
+        1.1144,
+        -1.615
+      ],
+      "quaternion": [
+        0.035811,
+        0.927374,
+        0.130604,
+        0.348767
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 24.0
+    },
+    {
+      "id": "000330",
+      "photo": "heldout/000330.jpg",
+      "position": [
+        0.7359,
+        1.1443,
+        1.5773
+      ],
+      "quaternion": [
+        -0.203349,
+        0.222872,
+        0.090656,
+        0.949083
+      ],
+      "fov_y_deg": 61.1697,
+      "principal_point": [
+        0.5,
+        0.5
+      ],
+      "aspect": 0.56237,
+      "psnr": 26.48
+    }
+  ],
+  "places": [
+    {
+      "id": "meeting-table",
+      "name": "Meeting table",
+      "aliases": [
+        "table",
+        "desk",
+        "conference table"
+      ],
+      "kind": "item",
+      "position": [
+        0.566,
+        0.76,
+        0.461
+      ],
+      "yaw_deg": 72.5,
+      "radius_m": 1.28,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    },
+    {
+      "id": "monitor",
+      "name": "Monitor",
+      "aliases": [
+        "screen",
+        "display",
+        "tv"
+      ],
+      "kind": "item",
+      "position": [
+        0.238,
+        1.053,
+        -0.207
+      ],
+      "yaw_deg": 41.0,
+      "radius_m": 1.04,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    },
+    {
+      "id": "laptop-and-controllers",
+      "name": "Laptop and controllers",
+      "aliases": [
+        "laptop",
+        "game controllers",
+        "gamepads"
+      ],
+      "kind": "item",
+      "position": [
+        -0.022,
+        0.775,
+        -0.006
+      ],
+      "yaw_deg": 41.0,
+      "radius_m": 0.8,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    },
+    {
+      "id": "chairs",
+      "name": "Chairs",
+      "aliases": [
+        "seats",
+        "blue chairs",
+        "chair"
+      ],
+      "kind": "item",
+      "position": [
+        -0.36,
+        0.445,
+        0.398
+      ],
+      "yaw_deg": 22.1,
+      "radius_m": 1.28,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    },
+    {
+      "id": "whiteboard-left-wall",
+      "name": "Whiteboard, left wall",
+      "aliases": [
+        "board",
+        "whiteboard",
+        "left board"
+      ],
+      "kind": "item",
+      "position": [
+        -0.983,
+        1.128,
+        1.238
+      ],
+      "yaw_deg": 41.0,
+      "radius_m": 1.6,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    },
+    {
+      "id": "whiteboard-far-wall",
+      "name": "Whiteboard, far wall",
+      "aliases": [
+        "board",
+        "whiteboard",
+        "far board"
+      ],
+      "kind": "item",
+      "position": [
+        -0.871,
+        1.12,
+        -1.745
+      ],
+      "yaw_deg": 0.0,
+      "radius_m": 1.6,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    },
+    {
+      "id": "whiteboard-right-wall",
+      "name": "Whiteboard, right wall",
+      "aliases": [
+        "board",
+        "whiteboard",
+        "right board"
+      ],
+      "kind": "item",
+      "position": [
+        1.653,
+        1.206,
+        -1.074
+      ],
+      "yaw_deg": 262.0,
+      "radius_m": 1.6,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    },
+    {
+      "id": "glass-door-to-balcony",
+      "name": "Glass door to balcony",
+      "aliases": [
+        "door",
+        "exit",
+        "balcony door"
+      ],
+      "kind": "item",
+      "position": [
+        0.506,
+        1.069,
+        2.019
+      ],
+      "yaw_deg": 180.0,
+      "radius_m": 1.12,
+      "notes": "placed by hand with the place editor (build team), 1 Nov; position scaled x0.8 with the room's rescale (team's rough sizes)"
+    }
+  ],
+  "scale": {
+    "value": 0.5495283502852284,
+    "pct_68": 12.749685157937574,
+    "method": "camera_height",
+    "cues": [
+      {
+        "name": "camera_height",
+        "value": 0.5495283502852284,
+        "sigma_log": 0.12,
+        "used": true,
+        "note": "generic 1.40 m / H_cap (no user height)"
+      }
+    ],
+    "checked_against": "team's rough sizes",
+    "check_error_pct": 25.0,
+    "check_n": 3
+  },
+  "metrics": {
+    "heldout_n": 8,
+    "psnr": 23.71546173095703,
+    "ssim": 0.9331711530685425,
+    "lpips": 0.19499656558036804,
+    "lpips_net": "alex",
+    "cc_psnr": 26.873783111572266,
+    "sd_psnr": 23.105496657500154
+  },
+  "build": {
+    "git": "311d8c3-dirty",
+    "pipeline": "0.9.0",
+    "date": "2026-11-01T22:12:19+05:30",
+    "report": "report.json"
+  }
+}

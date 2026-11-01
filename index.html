@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="ns-video" content="">
+<title>Namma Space</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/viewer.css">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three/addons/": "./vendor/addons/",
+  "@sparkjsdev/spark": "./vendor/spark.module.js"
+} }
+</script>
+<!-- Start the three big files in parallel now. Without this the browser finds three.core.js only after it has read three.module.js. -->
+<link rel="modulepreload" href="./vendor/three.module.js">
+<link rel="modulepreload" href="./vendor/three.core.js">
+<link rel="modulepreload" href="./vendor/spark.module.js">
+<link rel="modulepreload" href="./js/main.js">
+</head>
+<body>
+<script>
+  // Browsers without import maps (before Chrome 89 / Safari 16.4 / Firefox 108) cannot load the modules: say so instead of showing a blank page.
+  (function () {
+    var ok = window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports("importmap");
+    if (ok) return;
+    window.addEventListener("DOMContentLoaded", function () {
+      document.getElementById("nowebgl-title").textContent = "This browser is too old for the 3D viewer";
+      document.getElementById("nowebgl").hidden = false;
+      document.getElementById("loader").hidden = true;
+      var v = document.querySelector('meta[name="ns-video"]'), a = document.getElementById("video-link");
+      if (v && v.content) { a.href = v.content; a.hidden = false; }
+    });
+  })();
+</script>
+<div id="stage"></div>
+<canvas id="overlay"></canvas>
+
+<div id="hud" class="panel expanded" hidden>
+  <div class="hud-chip" id="hud-chip"><b id="chip-fps">--</b><span> fps</span><span id="chip-scale" class="dim"></span></div>
+  <div class="hud-body">
+    <div class="row"><span>fps</span><b id="h-fps">--</b></div>
+    <div class="row"><span>p95 frame</span><b id="h-p95">--</b></div>
+    <div class="row"><span>splats</span><b id="h-splats">--</b></div>
+    <div class="row"><span>download</span><b id="h-mb">--</b></div>
+    <div class="row"><span>quality</span><b id="h-q">--</b></div>
+    <div class="row"><span>scale</span><b id="h-scale">--</b></div>
+    <div class="row gpu"><span>GPU</span><b id="h-gpu">--</b></div>
+  </div>
+</div>
+
+
+<button id="srch-btn" class="pill" type="button" title="Search rooms and items (/)" hidden>
+  <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  <span>Search</span><kbd>/</kbd>
+</button>
+<div id="srch" class="panel" hidden>
+  <div class="srch-row">
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 13l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="srch-in" type="text" placeholder="Search a room or item" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-label="Search places">
+    <button id="srch-x" type="button" aria-label="Close search">&times;</button>
+  </div>
+  <ul id="srch-list" role="listbox"></ul>
+  <div class="srch-foot"><span class="tag">Round 2 preview</span><span class="dim">Enter picks the top match</span></div>
+</div>
+
+<div id="place" class="panel" hidden>
+  <div class="pl-head"><b id="pl-name"></b><span id="pl-kind" class="chip"></span><span class="tag">Round 2 preview</span><button id="pl-x" type="button" aria-label="Clear selection">&times;</button></div>
+  <div id="pl-info" class="pl-info"></div>
+  <div class="pl-btns">
+    <button id="pl-jump" type="button">Jump <kbd>J</kbd></button>
+    <button id="pl-route" type="button">Route <kbd>G</kbd></button>
+    <button id="pl-follow" type="button" hidden>Follow <kbd>Space</kbd></button>
+    <button id="pl-rm" type="button" class="ghost" hidden>Remove</button>
+  </div>
+</div>
+
+<div id="tool" class="panel" hidden>
+  <div id="tool-msg"></div>
+  <div class="tool-btns"><button id="tool-copy" type="button">Copy places JSON</button><button id="tool-clear" type="button">Clear</button><button id="tool-done" type="button">Done</button></div>
+</div>
+<div id="padd" class="panel" hidden>
+  <div class="padd-head"><b>New place</b><span id="padd-pos" class="dim"></span></div>
+  <input id="padd-name" type="text" placeholder="Name, for example Study desk" autocomplete="off" maxlength="60" aria-label="Place name">
+  <div id="padd-kind" class="seg"><button type="button" data-k="room">Room</button><button type="button" data-k="item" class="on">Item</button><button type="button" data-k="zone">Zone</button></div>
+  <input id="padd-alias" type="text" placeholder="Other names, comma separated (optional)" autocomplete="off" maxlength="120" aria-label="Other names">
+  <div class="tool-btns"><button id="padd-ok" type="button" class="go small">Add</button><button id="padd-cancel" type="button" class="ghost">Cancel</button></div>
+</div>
+<div id="jsonbox" class="overlay" hidden>
+  <div class="card narrow">
+    <h1>Places JSON</h1>
+    <p class="dim">Copy this text and paste it into scene.json as the value of "places".</p>
+    <textarea id="jsonbox-text" readonly rows="10"></textarea>
+    <button id="jsonbox-close" class="go small" type="button">Close</button>
+  </div>
+</div>
+
+<div id="mapwrap" class="panel small" hidden>
+  <canvas id="map"></canvas>
+  <div class="maplabel"><span id="map-title">Map</span><span class="dim">click to jump</span></div>
+</div>
+
+<div id="loader" class="panel wait">
+  <div id="loader-title">Namma Space</div>
+  <div class="bar"><i id="bar-fill"></i></div>
+  <div id="loader-sub" class="dim">Loading the 3D viewer code. This takes longer on a slow link.</div>
+  <noscript><div class="dim">This page needs JavaScript.</div></noscript>
+</div>
+
+<div id="start" class="overlay" hidden>
+  <div class="card">
+    <div class="eyebrow">Namma Space &middot; first-person twin</div>
+    <h1 id="s-title">Scene</h1>
+    <p class="lede" id="s-sub"></p>
+    <div class="cols">
+      <div>
+        <h2>Move</h2>
+        <ul class="keys">
+          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows: walk</li>
+          <li><kbd>Shift</kbd> run</li>
+          <li>Mouse: look (click the scene to capture it; <kbd>Esc</kbd> to release)</li>
+          <li><kbd>M</kbd> map, click it to jump &middot; <kbd>R</kbd> respawn</li>
+          <li class="needs-places" hidden><kbd>/</kbd> search a room or item: <kbd>J</kbd> jump, <kbd>G</kbd> route, <kbd>Space</kbd> follow <span class="tag">Round 2 preview</span></li>
+          <li><kbd>K</kbd> measure between two points</li>
+          <li><kbd>1</kbd>&ndash;<kbd>5</kbd> saved views &middot; <kbd>H</kbd> stats &middot; <kbd>?</kbd> help</li>
+          <li>Phone: left thumb walks, right thumb looks</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Five-minute judge path</h2>
+        <ol class="path">
+          <li><b>Walk</b> round the room for a minute. Walls and furniture stop you, and you slide along them.</li>
+          <li><b>Map</b> (<kbd>M</kbd>): click a far corner and look back across the room.</li>
+          <li class="needs-places" hidden><b>Find</b> (<kbd>/</kbd>): type a room or item. Press Route to see the walking path round the furniture, then Follow.</li>
+          <li><b>Reality check</b> (<kbd>C</kbd>): drag the slider between a held-out photo and the live render.</li>
+          <li><b>Tour benchmark</b> (<kbd>T</kbd>): a fixed 60 s walk that prints fps, p95, splats, MB and GPU.</li>
+          <li id="path-scale"><b>Scale</b>: the stats badge shows an estimate of the scale and its 68% range, from camera height. It is not a measured error. Press <kbd>K</kbd> and click two points to measure.</li>
+        </ol>
+      </div>
+    </div>
+    <div id="s-prov" class="prov"></div>
+    <div id="s-others" class="prov" hidden></div>
+    <button id="s-go" class="go" disabled>Loading&hellip;</button>
+  </div>
+</div>
+
+<div id="help" class="overlay" hidden>
+  <div class="card narrow">
+    <h1>Controls</h1>
+    <table class="ctl">
+      <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</td><td>walk (collides with walls and furniture)</td></tr>
+      <tr><td><kbd>Shift</kbd></td><td>run</td></tr>
+      <tr><td>mouse</td><td>look; click the scene to capture the pointer</td></tr>
+      <tr><td><kbd>R</kbd></td><td>respawn at the start point</td></tr>
+      <tr><td><kbd>M</kbd></td><td>map: small, large, hidden; click to jump</td></tr>
+      <tr><td><kbd>H</kbd></td><td>stats panel: expand or shrink</td></tr>
+      <tr><td><kbd>1</kbd>&ndash;<kbd>5</kbd></td><td>jump to a saved view</td></tr>
+      <tr><td><kbd>T</kbd></td><td>tour benchmark (60 s, fixed path)</td></tr>
+      <tr><td><kbd>C</kbd></td><td>reality check: photo against render; <kbd>&larr;</kbd><kbd>&rarr;</kbd> change photo</td></tr>
+      <tr class="needs-places" hidden><td><kbd>/</kbd></td><td>search rooms and items by name (Round 2 preview); Enter picks the top match</td></tr>
+      <tr class="needs-places" hidden><td><kbd>J</kbd> <kbd>G</kbd> <kbd>Space</kbd></td><td>jump to the picked place &middot; show the walking route &middot; follow the route</td></tr>
+      <tr><td><kbd>K</kbd></td><td>measure: click two points; shows metres and the estimated scale range</td></tr>
+      <tr><td><kbd>P</kbd></td><td>add a place (owner tool): click a spot, name it, then copy the places JSON</td></tr>
+      <tr><td><kbd>L</kbd></td><td>copy a link that opens this scene at this spot</td></tr>
+      <tr><td><kbd>F</kbd></td><td>fly mode (passes furniture, stays inside the room)</td></tr>
+      <tr><td><kbd>?</kbd> / <kbd>Esc</kbd></td><td>this help / close</td></tr>
+    </table>
+    <p class="dim" id="help-flags">URL options: ?scene=name &middot; ?place=id&amp;route=1&amp;follow=1 &middot; ?q=low|sd|hd &middot; ?pose=x,y,z,yaw,pitch &middot; ?bench=1 &middot; ?keys=1 &middot; ?asset=URL</p>
+  </div>
+</div>
+
+<div id="nowebgl" class="overlay" hidden>
+  <div class="card narrow">
+    <h1 id="nowebgl-title">This browser cannot show the 3D scene</h1>
+    <p>Namma Space needs WebGL 2. Open this page in current Chrome, Edge, Firefox or Safari on a laptop or phone with hardware graphics turned on.</p>
+    <p><a id="video-link" href="#" hidden>Watch the demonstration video instead</a></p>
+    <p class="dim" id="nowebgl-detail"></p>
+  </div>
+</div>
+
+<div id="errcard" class="overlay" hidden>
+  <div class="card narrow"><h1 id="err-title">Could not load the scene</h1><p id="err-msg"></p><button class="go small" type="button" onclick="location.reload()">Reload the page</button></div>
+</div>
+
+<div id="reality" hidden>
+  <div id="rc-box"><img id="rc-photo" alt="held-out photo"><div id="rc-line"></div></div>
+  <div id="rc-bar" class="panel">
+    <button id="rc-prev" title="previous (Left)">&lsaquo;</button>
+    <div class="rc-mid">
+      <div id="rc-cap">Held-out photo</div>
+      <input id="rc-slider" type="range" min="0" max="100" value="50" aria-label="photo against render">
+      <div class="rc-lab"><span>photo</span><span>live render</span></div>
+    </div>
+    <button id="rc-next" title="next (Right)">&rsaquo;</button>
+    <button id="rc-close" title="close (Esc)">Close</button>
+  </div>
+</div>
+
+<div id="bench" class="overlay" hidden>
+  <div class="card narrow">
+    <h1 id="b-title">Tour benchmark</h1>
+    <div id="b-prog" class="bar"><i id="b-fill"></i></div>
+    <pre id="b-res"></pre>
+    <button id="b-close" class="go small" hidden>Close</button>
+    <button id="b-copy" class="go small ghost" hidden>Copy result</button>
+  </div>
+</div>
+
+<div id="bottom" class="panel" hidden>
+  <button id="b-hd" hidden>HD</button>
+  <button id="b-measure" type="button" hidden>Measure</button>
+  <span class="dim" id="b-hint"><span id="hint-desk">WASD walk &middot; Shift run &middot; M map<span class="needs-places" hidden> &middot; / search</span> &middot; K measure &middot; ? help</span><span id="hint-touch" hidden>left thumb walks &middot; right thumb looks &middot; tap the map to enlarge</span></span>
+</div>
+
+<div id="toast" hidden></div>
+<div id="keyovl" hidden></div>
+<div id="touch" hidden><div id="stick"><i></i></div></div>
+<div id="paused" hidden>Click to resume &middot; ? for help</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
